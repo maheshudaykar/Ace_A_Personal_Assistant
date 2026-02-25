@@ -1,0 +1,20 @@
+# ACE Phase 0 - Minimal Dependencies
+
+# Core Python (3.11+)
+# No external dependencies initially - using only stdlib
+
+# Phase 0 uses:
+# - Python built-ins: logging, dataclasses, enum, pathlib, uuid, datetime, random
+# - No external packages required
+
+# Development (optional)
+pytest>=7.4.0
+black>=23.0.0
+flake8>=6.0.0
+mypy>=1.0.0
+
+# Future dependencies (Phase 1+):
+# llama-cpp-python >= 0.2.0  # For LLM inference
+# langchain >= 0.1.0          # For agent orchestration
+# pymilvus >= 2.3.0           # For vector database
+# Paramiko >= 3.0.0           # For SSH orchestration

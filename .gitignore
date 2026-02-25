@@ -1,0 +1,75 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.hypothesis/
+
+# Logs (but keep the logs directory)
+logs/*.log
+logs/*.log.*
+
+# Data (keep directory but ignore contents)
+data/*
+!data/.gitkeep
+
+# Config overrides (keep template)
+config/config.local.yaml
+config/config.prod.yaml
+
+# Virtual environments
+.env
+.venv
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE specific
+*.sublime-project
+*.sublime-workspace
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Pyre
+.pyre/
+
+# Phase 0 specific
+logs/system.log*
+*.pyc

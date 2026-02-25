@@ -1,0 +1,133 @@
+# ACE Phase 0 Configuration File
+# This file controls the behavior and settings for ACE Phase 0 MVP
+
+# Version
+version: "0.1.0"
+phase: 0
+name: "ACE - Autonomous Cognitive Engine"
+
+# Logging Configuration
+logging:
+  level: "DEBUG"  # DEBUG, INFO, WARNING, ERROR, CRITICAL
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  file: "logs/system.log"
+  max_bytes: 10485760  # 10MB
+  backup_count: 5
+  console_output: true
+  console_level: "INFO"
+
+# State Machine Configuration
+state_machine:
+  initial_state: "BOOT"
+  log_transitions: true
+  history_enabled: true
+
+# Deterministic Mode Configuration
+deterministic:
+  enabled: false  # Toggle with --deterministic flag
+  seed: 42
+  temperature: 0.0  # When enabled
+  temperature_normal: 0.7  # When disabled
+
+# Event Bus Configuration
+event_bus:
+  enabled: true
+  max_history: 1000  # Maximum events to keep in history
+  log_published_events: false  # Don't spam logs with every event
+  
+  # Event types to track
+  event_types:
+    - SYSTEM_BOOT
+    - TASK_RECEIVED
+    - TASK_STARTED
+    - TASK_COMPLETED
+    - TASK_FAILED
+    - STATE_CHANGED
+    - LOG_MESSAGE
+    - SYSTEM_SHUTDOWN
+
+# Tool Registry Configuration
+tools:
+  enabled: true
+  
+  # Built-in tools (Phase 0)
+  builtin_tools:
+    - name: "read_file"
+      enabled: true
+      description: "Read contents of a file"
+      
+    - name: "list_files"
+      enabled: true
+      description: "List files in a directory"
+      
+    - name: "write_file"
+      enabled: true
+      description: "Write content to a file"
+
+# LLM Interface Configuration
+llm:
+  model: "mock"  # Phase 0: mock, Phase 1+: llama, gpt-4, etc.
+  enabled: true
+  temperature: 0.7  # Default temperature
+  max_tokens: 100  # Max tokens for Phase 0 mock responses
+  
+  # Mock LLM settings (Phase 0)
+  mock:
+    enabled: true
+    context_aware: true  # Mock LLM understands context from prompts
+
+# CLI Configuration
+cli:
+  enabled: true
+  interactive: true
+  prompt: "> "  # CLI prompt
+  welcome_banner: true
+  
+  # Commands available in Phase 0
+  commands:
+    help: true
+    status: true
+    det: true  # Deterministic mode toggle
+    read: true
+    list: true
+    tools: true
+    llm: true
+    quit: true
+
+# Memory Configuration (Phase 0 - Empty placeholders)
+memory:
+  enabled: false  # Phase 1+
+  type: "hybrid"  # episodic, semantic, working
+  persistence: false
+  embed_model: "bge-base-en-v1.5"
+
+# Evolution Configuration (Phase 0 - Placeholder)
+evolution:
+  enabled: false  # Phase 1+
+  self_modify: false  # Never in Phase 0
+  self_improve: false  # Phase 2+
+
+# Security Configuration (Phase 0 - Minimal)
+security:
+  sandboxing: "basic"  # basic, strict (Phase 1+)
+  file_access: "local"  # local, restricted
+  allowed_extensions:
+    - "md"
+    - "txt"
+    - "py"
+    - "json"
+    - "yaml"
+  max_file_size_mb: 100
+
+# Data Directories
+directories:
+  logs: "logs"
+  data: "data"
+  config: "config"
+  cache: "data/.cache"
+
+# Development Settings
+development:
+  debug: true
+  verbose: false
+  test_mode: false
