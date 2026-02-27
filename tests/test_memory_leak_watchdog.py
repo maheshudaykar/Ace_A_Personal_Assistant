@@ -7,9 +7,6 @@ import sys
 from pathlib import Path
 
 import psutil
-import pytest
-
-from ace.ace_cognitive.agent_scheduler import AgentScheduler
 from ace.ace_diagnostics.evaluation_engine import EvaluationEngine
 from ace.ace_kernel.audit_trail import AuditTrail
 from ace.ace_kernel.nuclear_switch import NuclearSwitch
@@ -33,7 +30,7 @@ def test_memory_leak_watchdog_500_tasks(tmp_path: Path) -> None:
     executor = TerminalExecutor(audit, prompt, security, sandbox, profiler, evaluation)
 
     process = psutil.Process()
-    memory_samples = []
+    memory_samples: list[tuple[int, float]] = []
 
     # Force GC before starting
     gc.collect()

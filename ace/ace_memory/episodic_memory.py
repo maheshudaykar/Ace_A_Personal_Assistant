@@ -1,0 +1,135 @@
+"""Episodic memory - task-level persistent storage with write gating."""
+
+from __future__ import annotations
+
+from datetime import datetime, timezone
+from typing import TYPE_CHECKING, List
+from uuid import UUID
+
+from ace.ace_memory.memory_schema import MemoryEntry, MemoryType
+from ace.ace_memory.memory_store import MemoryStore
+
+if TYPE_CHECKING:
+    from ace.ace_memory.quality_scorer import QualityScorer
+
+
+class EpisodicMemory:
+    """Task-level persistent memory storage with write gating optimization."""
+
+    def __init__(self, memory_store: MemoryStore, write_threshold: float = 0.5) -> None:
+        """
+        Initialize episodic memory with write gating.
+        
+        Args:
+            memory_store: Persistent storage backend
+            write_threshold: Minimum importance score to persist (FluxMem pattern)
+        """
+        self._store = memory_store
+        self._write_threshold = write_threshold
+        self._filtered_count = 0  # Track how many entries were filtered
+
+    def record(
+        self,
+        task_id: str,
+        content: str,
+        importance_score: float = 0.5,
+        embedding: List[float] | None = None,
+        validate: bool = True,
+    ) -> MemoryEntry | None:
+        """
+        Record a new episodic memory entry with write gating.
+        
+        Only persists entries above the importance threshold (FluxMem pattern).
+        Low-importance entries should remain in working memory only.
+        
+        Args:
+            task_id: Unique task identifier
+            content: Memory content
+            importance_score: Importance rating (0-1)
+            embedding: Optional embedding vector
+            validate: Whether to validate with Pydantic
+        
+        Returns:
+            MemoryEntry if persisted, None if filtered by write gate
+        """
+        # Write gating: only persist high-importance entries
+        if importance_score < self._write_threshold:
+            self._filtered_count += 1
+            return None
+        
+        if validate:
+            entry = MemoryEntry(
+                task_id=task_id,
+                content=content,
+                importance_score=importance_score,
+                embedding=embedding,
+                memory_type=MemoryType.EPISODIC,
+                timestamp=datetime.now(timezone.utc),
+            )
+        else:
+            entry = MemoryEntry.model_construct(
+                task_id=task_id,
+                content=content,
+                importance_score=importance_score,
+                embedding=embedding,
+                memory_type=MemoryType.EPISODIC,
+                timestamp=datetime.now(timezone.utc),
+                access_count=0,
+                last_accessed=datetime.now(timezone.utc),
+                archived=False,
+            )
+        
+        self._store.save(entry)
+        return entry
+
+    def retrieve_by_task(self, task_id: str) -> List[MemoryEntry]:
+        """Retrieve all episodic memories for a specific task."""
+        entries = self._store.load_by_task(task_id)
+        
+        # Update access tracking for retrieved entries
+        for entry in entries:
+            if entry.memory_type == MemoryType.EPISODIC and not entry.archived:
+                entry.update_access()
+                self._store.save(entry)
+        
+        return entries
+
+    def retrieve_all_active(self) -> List[MemoryEntry]:
+        """Retrieve all non-archived episodic memories."""
+        return [
+            entry for entry in self._store.load_active()
+            if entry.memory_type == MemoryType.EPISODIC
+        ]
+
+    def retrieve_top_k(self, scorer: QualityScorer, k: int = 10) -> List[MemoryEntry]:
+        """
+        Retrieve top-K entries by quality score (bounded context - CogMem pattern).
+        
+        This is significantly faster than retrieve_all_active() when memory
+        is large, as it limits the context window to the most relevant entries.
+        
+        Args:
+            scorer: Quality scorer instance
+            k: Maximum number of entries to return
+        
+        Returns:
+            Top-K entries sorted by quality score (descending)
+        """
+        all_entries = self.retrieve_all_active()
+        
+        # Score all entries
+        scored = [(entry, scorer.score(entry)) for entry in all_entries]
+        
+        # Sort by score descending and take top-K
+        scored.sort(key=lambda x: x[1], reverse=True)
+        
+        return [entry for entry, _score in scored[:k]]
+
+    def archive_entries(self, entry_ids: List[UUID]) -> int:
+        """Archive episodic entries (delegate to store)."""
+        return self._store.prune(entry_ids)
+    
+    def get_filtered_count(self) -> int:
+        """Return number of entries filtered by write gating."""
+        return self._filtered_count
+

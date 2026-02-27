@@ -1,0 +1,41 @@
+{
+  "phase": "1",
+  "timestamp": 1772188949.2500415,
+  "task_metrics": {
+    "avg_latency_ms": 105.4842060059309,
+    "min_latency_ms": 95.66270001232624,
+    "max_latency_ms": 161.42080002464354,
+    "p50_latency_ms": 104.14599999785423,
+    "p95_latency_ms": 119.08370000310242,
+    "total_tasks": 200,
+    "total_time_s": 21.09718589996919,
+    "tasks_per_second": 9.47993732189145
+  },
+  "memory_metrics": {
+    "before_mb": 25.08984375,
+    "after_mb": 25.73046875,
+    "delta_mb": 0.640625,
+    "rss_mb": 25.73046875
+  },
+  "event_metrics": {
+    "throughput_events_per_sec": 46.725093561412,
+    "total_events": 1000,
+    "duration_s": 21.40177630004473
+  },
+  "scheduler_metrics": {
+    "tasks_scheduled": 50,
+    "duration_s": 0.3158271999564022,
+    "tasks_per_second": 158.31442005914045
+  },
+  "cpu_metrics": {
+    "cpu_percent": 0.0
+  },
+  "evaluation_metrics": {
+    "task_count": 200.0,
+    "success_rate": 1.0,
+    "avg_steps": 1.0,
+    "tool_success_rate": 1.0,
+    "avg_cpu_time_ms": 71.955,
+    "total_tokens": 0.0
+  }
+}

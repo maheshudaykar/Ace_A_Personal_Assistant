@@ -19,7 +19,7 @@ def compute_file_hash(file_path: Path) -> str:
 def freeze_layer0_checksums() -> dict[str, str]:
     """Compute checksums for all Layer 0 (kernel) files."""
     kernel_dir = Path("ace/ace_kernel")
-    checksums = {}
+    checksums: dict[str, str] = {}
     
     if not kernel_dir.exists():
         raise FileNotFoundError(f"Kernel directory not found: {kernel_dir}")
@@ -36,7 +36,7 @@ if __name__ == "__main__":
     print("Computing Phase 1 Layer 0 checksums...")
     checksums = freeze_layer0_checksums()
     
-    snapshot = {
+    snapshot: dict[str, object] = {
         "phase": "1",
         "tag": "ace_phase1_stable",
         "layer": "0_immutable_kernel",

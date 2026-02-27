@@ -7,11 +7,12 @@ import json
 import sys
 import time
 from pathlib import Path
+from typing import Any
 
 import psutil
 
 from ace.ace_cognitive.agent_scheduler import AgentScheduler
-from ace.ace_diagnostics.evaluation_engine import EvaluationEngine, TaskMetrics
+from ace.ace_diagnostics.evaluation_engine import EvaluationEngine
 from ace.ace_kernel.audit_trail import AuditTrail
 from ace.ace_kernel.nuclear_switch import NuclearSwitch
 from ace.ace_kernel.prompt_injection_detector import PromptInjectionDetector
@@ -21,7 +22,7 @@ from ace.ace_kernel.security_monitor import SecurityMonitor
 from ace.ace_tools.terminal_executor import TerminalExecutor
 
 
-def capture_baseline() -> dict:
+def capture_baseline() -> dict[str, Any]:
     """Run baseline performance capture for Phase 1."""
     tmp_path = Path("./data/baseline_test")
     tmp_path.mkdir(parents=True, exist_ok=True)
@@ -43,7 +44,7 @@ def capture_baseline() -> dict:
     mem_before = process.memory_info().rss / (1024 * 1024)  # MB
 
     # Measure task latency (100 tasks)
-    latencies = []
+    latencies: list[float] = []
     start = time.perf_counter()
     for i in range(100):
         task_start = time.perf_counter()
@@ -67,7 +68,7 @@ def capture_baseline() -> dict:
     event_throughput = event_count / event_duration
 
     # Scheduler behavior (concurrent tasks)
-    scheduler_results = []
+    scheduler_results: list[int] = []
     def dummy_task(idx: int) -> None:
         time.sleep(0.01)
         scheduler_results.append(idx)
@@ -89,7 +90,7 @@ def capture_baseline() -> dict:
     eval_report = evaluation.report()
     cpu_percent = process.cpu_percent(interval=0.1)
 
-    baseline = {
+    baseline: dict[str, Any] = {
         "phase": "1",
         "timestamp": time.time(),
         "task_metrics": {

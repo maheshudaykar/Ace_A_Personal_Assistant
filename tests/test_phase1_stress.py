@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 from ace.ace_cognitive.agent_scheduler import AgentScheduler
-from ace.ace_diagnostics.evaluation_engine import EvaluationEngine, TaskMetrics
+from ace.ace_diagnostics.evaluation_engine import EvaluationEngine
 from ace.ace_kernel.audit_trail import AuditTrail
 from ace.ace_kernel.nuclear_switch import NuclearSwitch
 from ace.ace_kernel.prompt_injection_detector import PromptInjectionDetector
@@ -36,7 +36,7 @@ def _build_system(tmp_path: Path) -> tuple[TerminalExecutor, AgentScheduler, Eva
 @pytest.mark.parametrize("task_id", range(100))
 def test_100_safe_task_stress(tmp_path: Path, task_id: int) -> None:
     """100 diverse safe tasks executed sequentially."""
-    executor, scheduler, evaluation, audit = _build_system(tmp_path)
+    executor, _scheduler, _evaluation, audit = _build_system(tmp_path)
 
     # Mix of task types
     tasks = [
@@ -45,7 +45,7 @@ def test_100_safe_task_stress(tmp_path: Path, task_id: int) -> None:
         ([sys.executable, "-c", "import sys; print(sys.version[:3])"], "import"),
         ([sys.executable, "-c", "for i in range(5): pass"], "loop"),
     ]
-    cmd, task_type = tasks[task_id % len(tasks)]
+    cmd, _task_type = tasks[task_id % len(tasks)]
 
     outcome = executor.execute(cmd, timeout_seconds=2.0, tokens_used=10)
 
@@ -70,7 +70,7 @@ def test_100_safe_task_stress(tmp_path: Path, task_id: int) -> None:
 ])
 def test_10_injection_attempts_blocked(tmp_path: Path, pattern: str) -> None:
     """10 prompt injection attempts must be blocked."""
-    executor, scheduler, evaluation, audit = _build_system(tmp_path)
+    executor, _scheduler, _evaluation, audit = _build_system(tmp_path)
 
     outcome = executor.execute(
         [sys.executable, "-c", "print('ok')"],
@@ -87,7 +87,7 @@ def test_10_injection_attempts_blocked(tmp_path: Path, pattern: str) -> None:
 @pytest.mark.parametrize("attempt", range(5))
 def test_5_sudo_attempts_blocked(tmp_path: Path, attempt: int) -> None:
     """5 sudo escalation attempts without nuclear mode must fail."""
-    executor, scheduler, evaluation, audit = _build_system(tmp_path)
+    executor, _scheduler, _evaluation, audit = _build_system(tmp_path)
 
     outcome = executor.execute(
         ["sudo", "echo", f"attempt_{attempt}"],
@@ -110,7 +110,7 @@ def test_5_sudo_attempts_blocked(tmp_path: Path, attempt: int) -> None:
 ])
 def test_5_file_escape_attempts_blocked(tmp_path: Path, escape_path: str) -> None:
     """5 file write escape attempts outside workspace must fail."""
-    executor, scheduler, evaluation, audit = _build_system(tmp_path)
+    executor, _scheduler, _evaluation, audit = _build_system(tmp_path)
 
     outcome = executor.execute(
         ["write"],
@@ -127,7 +127,7 @@ def test_5_file_escape_attempts_blocked(tmp_path: Path, escape_path: str) -> Non
 @pytest.mark.parametrize("attempt", range(5))
 def test_5_infinite_loop_timeout(tmp_path: Path, attempt: int) -> None:
     """5 infinite loop simulations must timeout and be killed."""
-    executor, scheduler, evaluation, audit = _build_system(tmp_path)
+    executor, _scheduler, _evaluation, audit = _build_system(tmp_path)
 
     outcome = executor.execute(
         [sys.executable, "-c", "while True: pass"],
@@ -144,7 +144,7 @@ def test_5_infinite_loop_timeout(tmp_path: Path, attempt: int) -> None:
 @pytest.mark.parametrize("agent_count", [10, 15, 20, 25, 30])
 def test_5_scheduler_overload(tmp_path: Path, agent_count: int) -> None:
     """5 scheduler overload tests with many concurrent agents."""
-    executor, scheduler, evaluation, audit = _build_system(tmp_path)
+    _executor, scheduler, _evaluation, _audit = _build_system(tmp_path)
 
     results: list[str] = []
 
