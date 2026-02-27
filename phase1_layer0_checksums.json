@@ -1,0 +1,15 @@
+{
+  "phase": "1",
+  "tag": "ace_phase1_stable",
+  "layer": "0_immutable_kernel",
+  "checksums": {
+    "ace\\ace_kernel\\audit_trail.py": "d8965c9c463a2856d7a3b0c47b947e31ebaea9362bcf0fd5e0f50997dddaf4c9",
+    "ace\\ace_kernel\\nuclear_switch.py": "64aff34b19b27b4ea7f0f5470d04092c72db93f0c9ae21e3860414987540c80c",
+    "ace\\ace_kernel\\prompt_injection_detector.py": "258849744d0bf55f3900eac2e9fb28eb8cff1f076ec3fd2290a062bc6e4363d3",
+    "ace\\ace_kernel\\resource_profiler.py": "0d9bd2f0fbc00a3661b7f3ef806d1a935368f591ef3513a08808180163a7fcdd",
+    "ace\\ace_kernel\\sandbox.py": "d81de9c03b558d816e112d5783c17bbfce6aae51b82d6c8cab70d9bac52d87c3",
+    "ace\\ace_kernel\\security_monitor.py": "a83c17b59fc9d28252b993c4e107e33bb8f354804bbf8f35305dad020f2e31bf",
+    "ace\\ace_kernel\\snapshot_engine.py": "295847ca8e08792deaaf860f83a3cfd29ff3e63dc5782a121155329870faeaff",
+    "ace\\ace_kernel\\state_machine.py": "35169f2b23a457d50f024e7cc2164581ff59bc46f8116da3e4c9f2c6487c6a58"
+  }
+}
