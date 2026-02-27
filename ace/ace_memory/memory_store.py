@@ -5,11 +5,13 @@ from __future__ import annotations
 import json
 import threading
 from collections import OrderedDict
+from datetime import datetime, timezone
 from hashlib import sha256
 from pathlib import Path
 from typing import Iterable, List
 from uuid import UUID
 
+from ace.ace_kernel.audit_trail import AuditTrail
 from ace.ace_memory.memory_schema import MemoryEntry
 
 
@@ -59,7 +61,13 @@ class LRUCache:
 class MemoryStore:
     """Append-only JSONL storage for memory entries with read-ahead caching."""
 
-    def __init__(self, store_path: str | Path, flush_every: int = 10, cache_size: int = 100) -> None:
+    def __init__(
+        self,
+        store_path: str | Path,
+        flush_every: int = 10,
+        cache_size: int = 100,
+        audit_trail: AuditTrail | None = None,
+    ) -> None:
         self._path = Path(store_path)
         self._lock = threading.Lock()
         if flush_every <= 0:
@@ -67,6 +75,7 @@ class MemoryStore:
         self._flush_every = flush_every
         self._pending_writes = 0
         self._cache = LRUCache(maxsize=cache_size)  # Read-ahead cache (MemGPT/LangChain pattern)
+        self._audit = audit_trail
         self._path.parent.mkdir(parents=True, exist_ok=True)
         if not self._path.exists():
             self._path.touch()
@@ -153,12 +162,124 @@ class MemoryStore:
 
         return pruned_count
 
+    def count_total_entries(self) -> int:
+        """Count total latest-version entries in store."""
+        return len(self.load_all())
+
+    def count_active_entries(self) -> int:
+        """Count non-archived latest-version entries in store."""
+        return len(self.load_active())
+
+    def prune_oldest_archived(self, count: int) -> int:
+        """Permanently delete oldest archived entries (deterministic order)."""
+        if count <= 0:
+            return 0
+
+        with self._lock:
+            self._handle.flush()
+            all_entries = self._load_all_unsafe()
+            archived_entries = [entry for entry in all_entries if entry.archived]
+            archived_entries.sort(key=lambda e: (e.timestamp, str(e.id)))
+
+            ids_to_delete = {entry.id for entry in archived_entries[:count]}
+            if not ids_to_delete:
+                return 0
+
+            kept_entries = [entry for entry in all_entries if entry.id not in ids_to_delete]
+            self._rewrite_entries_unsafe(kept_entries)
+            self._cache.invalidate()
+
+            deleted_count = len(ids_to_delete)
+            if self._audit is not None:
+                self._audit.append({
+                    "type": "memory.prune_oldest_archived",
+                    "deleted_count": deleted_count,
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                })
+
+            return deleted_count
+
+    def compact_archived_entries(self) -> int:
+        """
+        Deterministically compact archived entries.
+
+        If archived ratio > 30%, delete oldest archived entries until ratio <= 20%.
+        Returns number of permanently deleted entries.
+        """
+        with self._lock:
+            self._handle.flush()
+            all_entries = self._load_all_unsafe()
+            total_count = len(all_entries)
+            if total_count == 0:
+                return 0
+
+            archived_entries = [entry for entry in all_entries if entry.archived]
+            archived_count = len(archived_entries)
+            archived_ratio = archived_count / total_count
+
+            if archived_ratio <= 0.30:
+                return 0
+
+            required_delete_float = (archived_count - 0.20 * total_count) / 0.80
+            delete_count = max(0, int(required_delete_float + 0.999999))
+            if delete_count <= 0:
+                return 0
+
+            archived_entries.sort(key=lambda e: (e.timestamp, str(e.id)))
+            ids_to_delete = {entry.id for entry in archived_entries[:delete_count]}
+            kept_entries = [entry for entry in all_entries if entry.id not in ids_to_delete]
+
+            self._rewrite_entries_unsafe(kept_entries)
+            self._cache.invalidate()
+
+            deleted_count = len(ids_to_delete)
+            if self._audit is not None:
+                new_total = len(kept_entries)
+                new_archived = sum(1 for entry in kept_entries if entry.archived)
+                new_ratio = (new_archived / new_total) if new_total > 0 else 0.0
+                self._audit.append({
+                    "type": "memory.compaction.complete",
+                    "deleted_count": deleted_count,
+                    "total_before": total_count,
+                    "archived_before": archived_count,
+                    "archived_ratio_before": archived_ratio,
+                    "total_after": new_total,
+                    "archived_after": new_archived,
+                    "archived_ratio_after": new_ratio,
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                })
+
+            return deleted_count
+
     def _invalidate_selective(self, entry: MemoryEntry) -> None:
         """Selectively invalidate cache keys affected by this entry."""
         # Only invalidate "all" and task-specific cache
         keys_to_invalidate = ["all", f"task:{entry.task_id}", "active"]
         for key in keys_to_invalidate:
             self._cache.delete(key)
+
+    def _rewrite_entries_unsafe(self, entries: List[MemoryEntry]) -> None:
+        """Rewrite full store atomically with provided latest entries (lock required)."""
+        temp_path = self._path.with_suffix(self._path.suffix + ".tmp")
+
+        with temp_path.open("w", encoding="utf-8") as handle:
+            for entry in entries:
+                entry_payload = entry.model_dump(mode="json")
+                entry_json = json.dumps(
+                    entry_payload,
+                    sort_keys=True,
+                    ensure_ascii=True,
+                    separators=(",", ":"),
+                )
+                entry_hash = sha256(entry_json.encode("utf-8")).hexdigest()
+                record_json = f'{{"hash":"{entry_hash}","entry":{entry_json}}}'
+                handle.write(record_json + "\n")
+
+        self._handle.flush()
+        self._handle.close()
+        temp_path.replace(self._path)
+        self._handle = self._path.open("a", encoding="utf-8")
+        self._pending_writes = 0
 
     def _write_entry_unsafe(self, entry: MemoryEntry) -> None:
         """Write entry with hash wrapper (internal use only)."""

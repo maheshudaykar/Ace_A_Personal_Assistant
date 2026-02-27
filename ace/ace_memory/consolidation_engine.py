@@ -8,6 +8,7 @@ from typing import List, Set
 from uuid import UUID, uuid4
 
 from ace.ace_kernel.audit_trail import AuditTrail
+from ace.ace_memory import memory_config
 from ace.ace_memory.episodic_memory import EpisodicMemory
 from ace.ace_memory.memory_schema import MemoryEntry, MemoryType
 from ace.ace_memory.memory_store import MemoryStore
@@ -28,6 +29,7 @@ class ConsolidationEngine:
         self._episodic = episodic_memory
         self._scorer = quality_scorer
         self._audit = audit_trail
+        self._episodic.set_consolidation_engine(self)
 
     def should_consolidate(self) -> bool:
         """Check if consolidation trigger conditions are met."""
@@ -35,7 +37,11 @@ class ConsolidationEngine:
         episodic_count = sum(1 for e in active_entries if e.memory_type == MemoryType.EPISODIC)
         return episodic_count >= 100
 
-    def consolidate(self, merge_threshold: float = 0.85) -> int:
+    def consolidate(
+        self,
+        merge_threshold: float = 0.85,
+        max_comparisons_per_pass: int | None = None,
+    ) -> int:
         """
         Perform memory consolidation with deterministic similarity-based merging.
 
@@ -55,6 +61,9 @@ class ConsolidationEngine:
         # Find merge groups using deterministic similarity
         merge_groups: List[List[MemoryEntry]] = []
         processed_ids: Set[UUID] = set()
+        comparison_count = 0
+        max_comparisons = max_comparisons_per_pass or memory_config.MAX_COMPARISONS_PER_PASS
+        guard_triggered = False
 
         for entry, _score in scored_entries:
             if entry.id in processed_ids:
@@ -69,7 +78,12 @@ class ConsolidationEngine:
                 if candidate.id in processed_ids:
                     continue
 
+                if comparison_count >= max_comparisons:
+                    guard_triggered = True
+                    break
+
                 similarity = self._compute_similarity(entry, candidate)
+                comparison_count += 1
                 if similarity >= merge_threshold:
                     current_group.append(candidate)
                     processed_ids.add(candidate.id)
@@ -77,6 +91,9 @@ class ConsolidationEngine:
             # Only form a merge group if we have 2+ entries
             if len(current_group) >= 2:
                 merge_groups.append(current_group)
+
+            if guard_triggered:
+                break
 
         # Execute merges
         merged_count = 0
@@ -89,10 +106,20 @@ class ConsolidationEngine:
             self._episodic.archive_entries(entry_ids)
             merged_count += len(entry_ids)
 
+        if guard_triggered:
+            self._audit.append({
+                "type": "consolidation_guard_triggered",
+                "comparisons": comparison_count,
+                "max_comparisons_per_pass": max_comparisons,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            })
+
         self._audit.append({
             "type": "consolidation.complete",
             "merged_count": merged_count,
             "merge_groups": len(merge_groups),
+            "comparisons": comparison_count,
+            "guard_triggered": guard_triggered,
             "timestamp": datetime.now(timezone.utc).isoformat(),
         })
 
