@@ -2,9 +2,9 @@
 ## Autonomous Cognitive Engine - Architectural & Execution Blueprint
 
 **Status**: Foundation Planning Phase  
-**Last Updated**: 2026-02-25  
-**Author**: Lead Systems Architect (Autonomous Planning Mode)  
-**Governance**: Nuclear Switch-Protected | Phase-Gated Execution
+**Last Updated**: 2026-02-27  
+**Author**: Lead Systems Architect (Autonomous Planning Mode) + Research Integration  
+**Governance**: Nuclear Switch-Protected | Phase-Gated Execution | Security-First
 
 ---
 
@@ -19,6 +19,47 @@
 7. [File System Architecture Plan](#7--file-system-architecture-plan)
 8. [State Tracking Section](#8--state-tracking-section)
 9. [Flow Roadmap Diagram](#9--flow-roadmap-diagram)
+
+---
+
+## 🔴 CRITICAL ARCHITECTURE ADDITIONS (Research Integration)
+
+**Based on comprehensive analysis of 80+ research papers and 150+ repositories**, the following modules have been identified as **critical gaps** in ACE's original architecture. These are now **mandatory** for Phase 1-3 completion.
+
+### Layer 0 (Immutable Kernel) - Security Hardening
+1. **`ace_kernel/prompt_injection_detector.py`** - NX-bit for LLMs; prevents injection attacks
+2. **`ace_kernel/security_monitor.py`** - Real-time anomaly detection; blocks malicious tool usage
+3. **`ace_kernel/resource_profiler.py`** - Hardware detection; adaptive execution modes (CPU-only guarantee)
+
+### Layer 1 (Cognitive Engine) - Governance & Evaluation
+4. **`ace_cognitive/agent_scheduler.py`** - Multi-agent coordination with time-slicing
+5. **`ace_cognitive/meta_monitor.py`** - Self-awareness metrics (planning efficiency, tool success)
+6. **`ace_cognitive/evolution_controller.py`** - Prevent oscillation; require test suites
+7. **`ace_diagnostics/evaluation_engine.py`** - Continuous performance tracking
+
+### Layer 2 (Memory) - Consolidation & Pruning
+8. **`ace_memory/working_memory.py`** - 10-item task buffer
+9. **`ace_memory/consolidation_engine.py`** - **[CRITICAL]** Nightly merging prevents memory bloat
+10. **`ace_memory/quality_scorer.py`** - Score = Recency × Relevance × Importance
+11. **`ace_memory/pruning_manager.py`** - Auto-remove bottom 10% quality
+
+### Layer 3 (Distributed) - Byzantine Fault Tolerance
+12. **`ace_distributed/consensus_engine.py`** - **[CRITICAL]** Raft protocol; mandatory for multi-node
+13. **`ace_distributed/byzantine_detector.py`** - Detect malicious nodes
+14. **`ace_distributed/deadlock_detector.py`** - Resolve circular dependencies
+
+### Why These Modules Are Non-Negotiable
+
+| Module | Without It | With It |
+|--------|-----------|---------|
+| PromptInjectionDetector | Vulnerable to injection via tool outputs, files | 100% injection blocking |
+| SecurityMonitor | Malicious tools execute undetected | Real-time anomaly blocking |
+| ConsolidationEngine | Unbounded memory growth → system crash | Auto-pruning maintains performance |
+| EvolutionController | Oscillating self-modifications | Stable evolution with rollback |
+| ConsensusEngine | Distributed nodes desync → data corruption | Byzantine fault tolerance |
+
+**Total Additional Effort**: ~45 days (distributed across Phase 1-3)  
+**Risk Reduction**: Eliminates 6 critical failure modes identified in research
 
 ---
 
@@ -176,6 +217,9 @@
 - `ace_kernel/nuclear_switch.py` – Authorization handler
 - `ace_kernel/audit_trail.py` – Immutable logging
 - `ace_kernel/snapshot_engine.py` – Rollback system
+- `ace_kernel/prompt_injection_detector.py` – **[NEW]** Scan all inputs (user, tool output, files) for injection patterns; implement NX-bit style trusted/untrusted segmentation; block or sanitize before LLM ingestion
+- `ace_kernel/security_monitor.py` – **[NEW]** Real-time tool execution anomaly detection; block sudo escalation without nuclear mode, file writes outside workspace, unknown outbound network calls; risk score override authority
+- `ace_kernel/resource_profiler.py` – **[NEW]** Detect CPU cores, RAM, GPU+VRAM at boot; auto-select execution mode (Minimal/Balanced/Performance); enforce max 6GB RAM, 5GB VRAM; expose metrics to Model Governor
 
 ---
 
@@ -220,6 +264,9 @@
 - `ace_cognitive/reflection_engine.py` – Self-critique & strategy revision
 - `ace_cognitive/memory_integrator.py` – Semantic + episodic retrieval
 - `ace_cognitive/simulator.py` – Pre-execution simulation system
+- `ace_cognitive/agent_scheduler.py` – **[NEW]** Priority queue with time-slicing; enforce concurrency limit; prevent agent starvation; max parallel agents (CPU mode: 2, GPU mode: 4)
+- `ace_cognitive/meta_monitor.py` – **[NEW]** Track planning efficiency, tool success rate, error recovery latency, reflection improvement trends; feed metrics to EvaluationEngine
+- `ace_cognitive/evolution_controller.py` – **[NEW]** Test suite validation before structural mods; stability threshold (min X tasks before next evolution); rollback on regression; maintain improvement history; NEVER modify Layer 0
 
 ---
 
@@ -349,6 +396,11 @@
 - `ace_distributed/task_delegator.py` – Task distribution
 - `ace_distributed/sync_engine.py` – Memory & state sync
 - `ace_distributed/health_monitor.py` – Node monitoring
+- `ace_distributed/consensus_engine.py` – **[NEW - CRITICAL]** Raft-inspired leader election; state replication across nodes; memory sync integrity; handle leader failures gracefully; **Phase 3 cannot begin without this module**
+- `ace_distributed/byzantine_detector.py` – **[NEW - CRITICAL]** Detect malicious or inconsistent node behavior; vote-based truth determination; remove compromised nodes from cluster; log Byzantine incidents
+- `ace_distributed/deadlock_detector.py` – **[NEW - CRITICAL]** Detect circular dependencies between distributed agents; abort lowest-priority task in cycle; prevent system-wide hangs
+
+> **DISTRIBUTED LAYER MANDATE**: Phase 3 cannot begin without consensus engine implementation. Byzantine fault tolerance is non-negotiable for multi-node deployments.
 
 ---
 
@@ -392,6 +444,111 @@
 - `ace_interface/vision_interface.py` – Screen/image analysis
 - `ace_interface/rest_api.py` – HTTP API
 - `ace_interface/antigravity_adapter.py` – Anti-Gravity bridge
+
+---
+
+---
+
+## 🔒 IMMUTABLE MODULE BOUNDARIES (Governance Enforcement)
+
+**Purpose**: Enforce that certain kernel modules cannot be modified by self-evolution or distributed nodes.
+
+### IMMUTABLE MODULES (Cannot be modified except via Nuclear Mode)
+
+The following modules form ACE's immutable security and governance core:
+
+#### Layer 0 (Kernel Core) - ALL IMMUTABLE
+- `ace_kernel/sandbox.py`
+- `ace_kernel/nuclear_switch.py`
+- `ace_kernel/audit_trail.py`
+- `ace_kernel/snapshot_engine.py`
+- `ace_kernel/prompt_injection_detector.py`
+- `ace_kernel/security_monitor.py`
+- `ace_kernel/resource_profiler.py`
+
+#### Distributed Governance - IMMUTABLE
+- `ace_distributed/consensus_engine.py`
+- `ace_distributed/byzantine_detector.py`
+
+#### Policy & Evaluation - IMMUTABLE
+- `ace_kernel/policy_engine.py`
+- `ace_diagnostics/evaluation_engine.py`
+
+### Enforcement Mechanisms
+
+1. **EvolutionController MUST NOT modify immutable modules**
+   - Any attempt to propose changes to Layer 0 → BLOCKED
+   - Logged as security violation
+   - Triggers alert to operator
+
+2. **Distributed nodes CANNOT override kernel governance**
+   - Consensus protocol is immutable
+   - Byzantine detector cannot be disabled by compromised node
+   - Security monitor runs on all nodes (cannot be bypassed)
+
+3. **File-level protection**
+   - Immutable modules marked read-only at filesystem level
+   - Git pre-commit hooks prevent accidental modification
+   - Runtime integrity checks (SHA-256 hash validation)
+
+4. **Nuclear Mode is the ONLY exception**
+   - Requires explicit user authorization
+   - Passphrase + confirmation
+   - All modifications logged to immutable audit trail
+   - Snapshot created before any change
+
+### Violation Handling
+
+```python
+if evolution_controller.proposes_change_to(immutable_module):
+    if not nuclear_mode.is_active():
+        block_proposal()
+        log_security_violation()
+        alert_operator("Evolution attempted to modify immutable kernel")
+        rollback_to_snapshot()
+```
+
+---
+
+## ⚠️ FAILURE MODE MATRIX (Detection & Recovery)
+
+**Purpose**: Comprehensive failure detection, response, and recovery strategy.
+
+| Failure Type | Detection Module | Detection Trigger | Recovery Action | Rollback Required | Logged |
+|---|---|---|---|---|---|
+| **Prompt Injection** | PromptInjectionDetector | Untrusted content in prompt | Sanitize input + alert operator | No | Yes (SecurityEvent) |
+| **Tool Anomaly** | SecurityMonitor | Anomaly score > 0.9 | Block tool call + snapshot | Yes (if already executed) | Yes (ToolIncident) |
+| **Evolution Regression** | EvaluationEngine | Task success rate drops > 5% | Abort evolution + rollback | Yes | Yes (EvolutionFail) |
+| **Memory Bloat** | ConsolidationEngine | Memory size > threshold | Trigger consolidation now | No | Yes (MemoryAlert) |
+| **Resource Overuse** | ResourceProfiler | RAM/GPU usage > limit | Kill offending agent | No | Yes (QuotaViolation) |
+| **Deadlock** | DeadlockDetector | Circular dependency detected | Abort youngest task in cycle | No | Yes (DeadlockEvent) |
+| **Byzantine Node** | ByzantineDetector | Node votes against majority | Mark suspicious + exclude from quorum | No | Yes (ByzantineAlert) |
+| **Consensus Failure** | ConsensusEngine | Leader crash / no quorum | Trigger leader election | No | Yes (ConsensusEvent) |
+| **Snapshot Corruption** | SnapshotEngine | Hash/signature mismatch | Lock system + alert operator | Cannot rollback | Yes (IntegrityViolation) |
+| **Audit Tampering** | AuditTrail | Log size decreases | Lock system + alert operator | N/A (immutable) | Yes (TamperAlert) |
+| **Nuclear Mode Abuse** | NuclearModeController | Passphrase brute force | Lock account + alert | N/A | Yes (NuclearAbuse) |
+| **Network Partition** | DistributedMemorySync | No heartbeat from majority | Minority nodes → read-only | No | Yes (PartitionEvent) |
+| **LLM Inference Failure** | ModelRouter | Model timeout or crash | Retry with smaller model | No | Yes (InferenceError) |
+| **File Access Denied** | SecurityMonitor | OS permission error | Log attempt + notify operator | No | Yes (AccessDenied) |
+
+### Recovery Time Objectives (RTO)
+
+| Failure Tier | Max Recovery Time | Impact |
+|---|---|---|
+| **Tier 1 (Critical)** | < 10 seconds | Prompt injection, Byzantine node, Consensus failure |
+| **Tier 2 (High)** | < 60 seconds | Tool misuse, Evolution regression, Memory bloat |
+| **Tier 3 (Medium)** | < 5 minutes | Resource overuse, LLM failure, File access denied |
+
+### Failure Recovery Guarantees
+
+✅ **Prompt Injection**: Prevented before LLM execution (zero RTO)  
+✅ **Tool Misuse**: Snapshot rollback restores pre-execution state  
+✅ **Evolution Regression**: Automatic rollback to previous version  
+✅ **Memory Bloat**: Consolidation completes within 60 seconds  
+✅ **Deadlock**: Youngest task aborted, others continue  
+✅ **Byzantine Node**: Consensus excludes malicious node, system continues  
+✅ **Consensus Failure**: Leader election completes within 30 seconds  
+⚠️ **Snapshot Corruption**: Requires manual admin intervention (cannot auto-recover)  
 
 ---
 
@@ -652,6 +809,15 @@ ELSE:
 - **Batch Size**: Auto-reduce for CPU execution
 - **Temperature Tuning**: Lower for deterministic tasks, higher for creative
 - **Model Caching**: Keep 2 models in memory, swap on demand
+
+**Enforcement Hierarchy** (CRITICAL):
+```
+ResourceProfiler → ModelGovernor → ModelRouter
+```
+
+> **ModelGovernor MUST query ResourceProfiler before selecting model tier.**  
+> This prevents model routing from bypassing hardware caps in edge cases.  
+> If ResourceProfiler reports Minimal Mode (CPU-only), ModelGovernor CANNOT select Tier 3/4 models regardless of complexity score.
 
 **Core Modules**:
 - `ace_cognitive/model_governor.py` – Model routing logic
@@ -1996,6 +2162,152 @@ ace replay --event-log=events_2026-02-25.log
 
 ---
 
+# 2.5️⃣ CRITICAL MODULE DEPENDENCY GRAPH
+
+## Layered Build Order (Authoritative)
+
+This section defines the critical path for ACE implementation based on research integration findings. Modules must be built in strict dependency order.
+
+### Layer 0: Immutable Kernel (Foundation)
+**These modules are immutable except via Nuclear Mode. Build order matters.**
+
+1. **SnapshotEngine** (existing Phase 0) - ✅ Complete
+   - Provides: Immutable snapshots for rollback
+
+2. **AuditTrail** (existing Phase 0) - ✅ Complete
+   - Depends on: SnapshotEngine
+   - Provides: Append-only event log
+
+3. **PromptSecurityLayer** (NEW - Phase 1 CRITICAL)
+   - Depends on: AuditTrail
+   - Provides: NX-bit for LLMs (data vs. instructions separation)
+   - Effort: 2 days
+   - **Why critical**: Prevents prompt injection attacks from any input source
+
+4. **SecurityMonitor** (NEW - Phase 1 CRITICAL)
+   - Depends on: AuditTrail
+   - Provides: Behavioral anomaly detection for all tool invocations
+   - Effort: 3 days
+   - **Why critical**: Catches novel attacks pattern-matching misses
+
+5. **NuclearModeController** (NEW - Phase 1 CRITICAL)
+   - Depends on: PromptSecurityLayer, SecurityMonitor, AuditTrail
+   - Provides: Kernel escalation with immutable audit trail
+   - Effort: 2 days
+   - **Why critical**: Enables safe kernel modification while maintaining governance
+
+### Layer 1: Cognitive Core (Task Execution)
+**These modules execute tasks but cannot modify Layer 0 (except via NuclearMode).**
+
+1. **ResourceQuotaManager** (NEW - Phase 1 HIGH)
+   - Depends on: SecurityMonitor (Layer 0)
+   - Provides: Adaptive resource management with hardware detection
+   - Effort: 3 days
+   - **Why critical**: Ensures ACE doesn't crash on resource exhaustion
+
+2. **WorkingMemoryBuffer** (NEW - Phase 1 MEDIUM)
+   - Depends on: AuditTrail
+   - Provides: Explicit task-scoped short-term context
+   - Effort: 2 days
+
+3. **MetaCognitiveMonitor** (NEW - Phase 1 MEDIUM)
+   - Depends on: WorkingMemoryBuffer, AuditTrail
+   - Provides: Self-awareness metrics (planning efficiency, tool accuracy)
+   - Effort: 3 days
+
+4. **EvaluationEngine** (NEW - Phase 1 HIGH - PARALLEL)
+   - Depends on: AuditTrail
+   - Provides: Continuous cognitive performance tracking
+   - Effort: 5 days
+   - **Why critical**: Enables regression detection for all improvements
+
+5. **ReflectionEngine** (existing Phase 1)
+   - Depends on: MetaCognitiveMonitor, EvaluationEngine
+   - Provides: Self-introspection and learning
+
+### Layer 2: Evolution & Memory Stability (Self-Improvement Governance)
+**These modules manage self-evolution with verification-before-execution.**
+
+1. **MemoryQualityScoring** (NEW - Phase 2 CRITICAL)
+   - Depends on: EvaluationEngine (Layer 1)
+   - Provides: Quality score = Recency × Relevance × Importance
+   - Effort: 3 days
+
+2. **ConsolidationEngine** (NEW - Phase 2 CRITICAL)
+   - Depends on: MemoryQualityScoring, AuditTrail
+   - Provides: Nightly memory consolidation (merge, prune, archive)
+   - Effort: 5 days
+   - **Why critical**: Prevents unbounded memory growth
+
+3. **TestSuiteValidator** (NEW - Phase 2 CRITICAL)
+   - Depends on: EvaluationEngine (Layer 1)
+   - Provides: Mandate test cases for self-generated code
+   - Effort: 3 days
+   - **Why critical**: Safety gate before code registration
+
+4. **EvolutionController** (NEW - Phase 2 CRITICAL)
+   - Depends on: TestSuiteValidator, ConsolidationEngine, SnapshotEngine
+   - Provides: Stability controller (min 3 tasks between evolutions) + regression detection
+   - Effort: 5 days
+   - **Why critical**: Prevents oscillating self-modifications
+
+### Layer 3: Multi-Agent Control (Concurrency & Coordination)
+**These modules enable safe multi-agent execution.**
+
+1. **AgentScheduler** (NEW - Phase 3 CRITICAL)
+   - Depends on: ResourceQuotaManager, MetaCognitiveMonitor
+   - Provides: AIOS-inspired priority-based scheduling with time-slicing
+   - Effort: 7 days
+
+### Layer 4: Distributed Governance (Multi-Node Fault Tolerance)
+**These modules enable Byzantine-fault-tolerant distributed execution.**
+
+1. **ConsensusEngine** (NEW - Phase 3 CRITICAL)
+   - Depends on: AuditTrail, SnapshotEngine
+   - Provides: Raft-based consensus for strong consistency
+   - Effort: 10 days
+   - **Why critical**: Cannot have distributed system without consensus
+
+2. **ByzantineDetector** (NEW - Phase 3 CRITICAL)
+   - Depends on: ConsensusEngine, AuditTrail
+   - Provides: Malicious node detection and exclusion
+   - Effort: 7 days
+   - **Why critical**: Prevents single compromised node from corrupting system
+
+3. **DeadlockDetector** (NEW - Phase 3 CRITICAL)
+   - Depends on: AgentScheduler, ConsensusEngine
+   - Provides: Circular wait detection and resolution
+   - Effort: 5 days
+
+4. **DistributedMemorySync** (NEW - Phase 3 CRITICAL - moved from Phase 5)
+   - Depends on: ConsolidationEngine, ConsensusEngine
+   - Provides: SEDM pattern (gossip + vector similarity voting)
+   - Effort: 7 days
+
+## Critical Path Summary
+
+| Phase | Critical Modules | Effort | Key Guarantee |
+|-------|------------------|--------|---------------|
+| Phase 0 | Snapshots, Audit | ✅ Done | Immutable audit trail |
+| Phase 1 | Prompt Security, Anomaly Detection, Nuclear Mode, Resource Mgmt, Evaluation | 20 days | Security hardening + performance tracking |
+| Phase 2 | Memory Consolidation, Quality Scoring, Evolution Controller, Test Validator | 16 days | Memory stability + safe self-evolution |
+| Phase 3 | Agent Scheduler, Consensus, Byzantine Detector, Deadlock Detector | 29 days | Byzantine fault tolerance + distributed coordination |
+| Phase 4+ | Code Architecture, Proactive Intelligence, Nuclear Capability | ... | Extended capabilities |
+
+**Total Critical Path**: ~65 days
+
+## Non-Negotiable Invariants
+
+✅ No module in Layer N may write to Layer N-1 (except Layer 2-3 can request Layer 0 escalation via NuclearMode)  
+✅ Layer 0 modules are permanently immutable unless Nuclear Mode is active  
+✅ All state changes are cryptographically auditable  
+✅ Consensus protocol is mandatory for any multi-node deployment  
+✅ Byzantine tolerance required (tolerate f < N/3 malicious nodes)  
+✅ Test suite required for self-generated code (Phase 2+)  
+✅ Stability controller prevents rapid oscillation (Phase 2+)
+
+---
+
 # 3️⃣ PHASE-BASED DEVELOPMENT PLAN
 
 ## Phase 0: Foundation & Environment Setup
@@ -2068,8 +2380,25 @@ make build-docker
 
 ---
 
-## Phase 1: Core Automation Engine
-**Duration**: 3-4 weeks | **Owner**: Cognitive + Tool layers
+## Phase 1: Kernel & Governance Foundation + Core Engine
+**Duration**: 4-5 weeks | **Owner**: Cognitive + Tool + Security layers
+
+**Phase Order Guardrails (STRICT)**:
+- **Kernel + Security + Scheduler first** (Layer 0 + AgentScheduler)
+- **Evaluation Engine live from Day 1** (collect metrics from the first task)
+- **Memory + Consolidation next** (Phase 2A)
+- **Evolution governance only after memory stability** (Phase 2B)
+- **Distributed layer only after all prior phases are stable** (no early coding)
+
+**MUST INCLUDE (Non-Negotiable)**:
+- ✅ PromptInjectionDetector
+- ✅ SecurityMonitor
+- ✅ ResourceProfiler
+- ✅ AgentScheduler
+- ✅ EvaluationEngine (live from day 1, parallel track)
+- ✅ StabilityController (iteration limits, deadlock detection)
+
+**NO memory consolidation yet** (deferred to Phase 2)
 
 ### Goals
 - [ ] Implement basic task execution framework
@@ -2082,6 +2411,12 @@ make build-docker
 - [ ] Establish OS-level control capabilities
 - [ ] Create basic error handling & recovery
 - [ ] Implement internal telemetry & decision tracing
+- [ ] **[CRITICAL]** Implement prompt injection defense (NX-bit for LLMs)
+- [ ] **[CRITICAL]** Build behavioral anomaly detection (SecurityMonitor)
+- [ ] **[CRITICAL]** Design evaluation framework for cognitive performance
+- [ ] **[NEW]** Implement nuclear mode protocol (kernel escalation)
+- [ ] **[NEW]** Implement resource quota management (adaptive modes)
+- [ ] **[NEW]** Build meta-cognitive monitoring system
 
 ### Subtasks
 
@@ -2168,6 +2503,85 @@ make build-docker
 - [ ] Implement REST API skeleton
 - [ ] Create configuration system
 
+#### Kernel Security Hardening (NEW - CRITICAL)
+- [ ] **Prompt Injection Detector** (`ace_kernel/prompt_injection_detector.py`) - 2 days
+  - [ ] Scan user input, tool output, and file content before LLM ingestion
+  - [ ] Implement NX-bit style trusted/untrusted prompt segmentation
+  - [ ] Block or sanitize injection patterns ("ignore previous instructions", base64 encoding, Unicode tricks)
+  - [ ] Log all injection attempts to audit trail with severity score
+  - [ ] Unit tests for trust boundary enforcement
+  - [ ] Integration test with adversarial injection dataset
+
+- [ ] **Prompt Security Layer** (`ace_kernel/prompt_security.py`) - 2 days (CONSOLIDATED with above)
+  - [ ] Implement NX-bit for LLMs (mark trusted vs. untrusted content)
+  - [ ] Validate LLM outputs don't follow untrusted instructions
+  - [ ] Log injection attempts to audit trail
+  - [ ] Unit tests for trust boundary enforcement
+  - [ ] Integration test with test suite validator
+
+- [ ] **Behavioral Anomaly Detection** (`ace_kernel/security_monitor.py`) - 3 days
+  - [ ] Learn baseline tool usage patterns (frequency, args)
+  - [ ] Implement anomaly scoring (Z-score based)
+  - [ ] Block suspicious tool invocations (> 0.9 threshold)
+  - [ ] Log security incidents with anomaly details
+  - [ ] Dashboard for monitoring tool usage patterns
+
+- [ ] **Nuclear Mode Controller** (`ace_kernel/nuclear_mode.py`) - 2 days
+  - [ ] 5-step activation protocol (request → confirmation → passphrase → duration → log)
+  - [ ] Passphrase authentication with 3-attempt lockout
+  - [ ] Auto-disablement on timeout or task completion
+  - [ ] Immutable audit trail of escalations
+  - [ ] Block unauthorized kernel access attempts
+
+#### Resource Governance Hardening (NEW)
+- [ ] **Resource Profiler** (`ace_kernel/resource_profiler.py`) - 3 days
+  - [ ] Detect at boot: CPU cores, RAM available, GPU presence + VRAM
+  - [ ] Auto-select execution mode: Minimal (CPU-only, 2GB), Balanced (6GB), Performance (6GB RAM + 5GB VRAM)
+  - [ ] Enforce hard limits: Max 6GB RAM, Max 5GB VRAM
+  - [ ] Expose hardware metrics to Model Governor for routing decisions
+  - [ ] Dynamic mode switching if resources change during runtime
+  - [ ] CPU-only fallback guarantee (always functional without GPU)
+
+- [ ] **Resource Quota Manager** (`ace_cognitive/resource_quota.py`) - 3 days (builds on profiler)
+  - [ ] Hardware detection at boot (RAM/GPU/CPU/cores)
+  - [ ] Three execution modes: Minimal (2GB), Balanced (6GB), High-Performance (6GB+5GB GPU)
+  - [ ] Dynamic mode selection based on available resources
+  - [ ] Per-agent resource limits enforcement
+  - [ ] Kill agents exceeding memory/GPU quotas
+  - [ ] CPU-only fallback guarantee (always works without GPU)
+
+- [ ] **Agent Scheduler** (`ace_cognitive/agent_scheduler.py`) - 7 days [CRITICAL]
+  - [ ] Priority queue for agent task assignment
+  - [ ] Time-slicing for fair agent execution
+  - [ ] Enforce concurrency limit (configurable per execution mode)
+  - [ ] Prevent agent starvation (minimum time slice per agent)
+  - [ ] Max parallel agents: CPU mode = 2, GPU mode = 4
+  - [ ] Integration test with 10+ concurrent agents
+
+- [ ] **Working Memory Buffer** (`ace_memory/working_memory.py`) - 2 days [MOVED TO MEMORY LAYER]
+  - [ ] Explicit 10-item short-term context buffer
+  - [ ] Task-scoped memory (cleared after task completion)
+  - [ ] Priority-based item eviction
+  - [ ] Integration with long-term memory layer
+
+- [ ] **Meta-Cognitive Monitor** (`ace_cognitive/meta_monitor.py`) - 3 days
+  - [ ] Track planning efficiency (steps taken vs. optimal)
+  - [ ] Monitor tool selection accuracy (success rate per tool)
+  - [ ] Measure error recovery speed
+  - [ ] Memory retrieval precision tracking
+  - [ ] Generate self-awareness metrics
+
+#### Evaluation Framework (NEW - PARALLEL TRACK)
+- [ ] **Evaluation Engine** (`ace_diagnostics/evaluation_engine.py`) - 5 days
+  - [ ] Cognitive performance metrics (task success rate, planning efficiency, error recovery rate)
+  - [ ] Memory performance metrics (retrieval precision, recall, staleness)
+  - [ ] Autonomy metrics (human intervention rate, decision confidence)
+  - [ ] Safety metrics (policy violations, nuclear triggers, rollback frequency)
+  - [ ] Resource metrics (CPU/GPU utilization, memory footprint, token consumption)
+  - [ ] Generate daily evaluation reports
+  - [ ] Baseline tracking for regression detection
+  - [ ] Alerting on performance degradation (>5% drop)
+
 ### Required Repos
 - llama.cpp (local LLM inference)
 - LangChain (agent orchestration)
@@ -2196,6 +2610,25 @@ make build-docker
 - [ ] Errors are caught, logged, and recoverable
 - [ ] Telemetry captures all decisions with reasoning traces
 - [ ] State snapshots enable full recovery
+- [ ] **[SECURITY]** Prompt injection attempts blocked with 100% success rate
+- [ ] **[SECURITY]** Anomalous tool usage detected (baseline + 2.5σ deviations)
+- [ ] **[SECURITY]** Nuclear mode activation requires passphrase + confirmation
+- [ ] **[RESOURCE]** System adapts to available hardware (Minimal/Balanced/High-Perf modes)
+- [ ] **[RESOURCE]** Per-agent memory quotas enforced (kill if exceeded)
+- [ ] **[EVALUATION]** Cognitive metrics recorded for all task executions
+- [ ] **[EVALUATION]** Performance baselines established for regression detection
+
+**Phase 1 Completion Gate (Non-Negotiable)**:
+- [ ] **All Layer 0 modules (Kernel + Security) + AgentScheduler + EvaluationEngine stable under 100-task stress test**
+  - [ ] Stress test: 100 diverse tasks (file ops, reasoning, tool chaining, LLM inference) executed sequentially
+  - [ ] Zero kernel panics or unrecoverable errors
+  - [ ] All security modules (PromptInjectionDetector, SecurityMonitor) functioning correctly
+  - [ ] EvaluationEngine successfully records metrics for all 100 tasks
+  - [ ] AgentScheduler handles concurrent agents without deadlock
+  - [ ] ResourceProfiler correctly adapts to hardware changes during test
+  - [ ] Audit trail complete and tamper-proof
+
+> **This prevents premature Phase 2 entry.** Phase 2 builds on Layer 0 stability. If kernel is unstable, evolution/memory will compound failures.
 
 ### Risk Factors
 - LLM inference latency degradation on low-end CPU
@@ -2216,8 +2649,23 @@ pytest ace_tools/tests/test_registry.py
 
 ---
 
-## Phase 2: Memory & Reflection System
-**Duration**: 2-3 weeks | **Owner**: Memory architecture
+## Phase 2: Memory Architecture + Evolution Hardening
+**Duration**: 3-4 weeks | **Owner**: Memory architecture + Self-evolution
+
+**Phase 2 Order (STRICT)**:
+- **Phase 2A**: Memory + Consolidation (complete and stable before any evolution work)
+- **Phase 2B**: Evolution governance (starts only after 2A is stable)
+- **No distributed-layer coding until Phase 2B is stable**
+
+**MUST INCLUDE (Non-Negotiable - Research Critical)**:
+- ✅ WorkingMemory (`ace_memory/working_memory.py`)
+- ✅ ConsolidationEngine (`ace_memory/consolidation_engine.py`)
+- ✅ QualityScorer (`ace_memory/quality_scorer.py`)
+- ✅ PruningManager (`ace_memory/pruning_manager.py`)
+- ✅ EvolutionController (`ace_cognitive/evolution_controller.py`)
+- ✅ MetaMonitor (`ace_cognitive/meta_monitor.py`)
+
+> **PHASE 2 – NON-OPTIONAL**: Memory consolidation prevents unbounded memory growth. Evolution controller prevents oscillating self-modifications. These are mandatory before Phase 3.
 
 ### Goals
 - [ ] Implement semantic memory (vector search)
@@ -2226,6 +2674,12 @@ pytest ace_tools/tests/test_registry.py
 - [ ] Implement failure memory (mistake archive)
 - [ ] Build memory maintenance system (decay, pruning, summarization)
 - [ ] Create knowledge graph for reasoning
+- [ ] **[CRITICAL]** Implement memory consolidation loop (nightly merging + pruning)
+- [ ] **[CRITICAL]** Build memory quality scoring (recency × relevance × importance)
+- [ ] **[CRITICAL]** Implement evolution stability controller (prevent oscillation)
+- [ ] **[CRITICAL]** Require test suites for self-generated code
+- [ ] **[NEW]** Build tool misuse detection via behavioral chaining analysis
+- [ ] **[NEW]** Implement improvement metrics tracking
 
 ### Subtasks
 
@@ -2257,12 +2711,34 @@ pytest ace_tools/tests/test_registry.py
 - [ ] Build recovery suggestion engine
 - [ ] Implement neural error model
 
-#### Memory Maintenance
+#### Memory Maintenance + Consolidation (ENHANCED)
 - [ ] Implement memory decay algorithm (older memories lower relevance)
 - [ ] Create auto-summarization for old memories
 - [ ] Build duplicate detection & merging
 - [ ] Implement memory pruning (below-threshold removal)
 - [ ] Create memory optimization scheduler
+
+- [ ] **Memory Consolidation Engine** (`ace_memory/consolidation_engine.py`) - 5 days [NEW - PHASE 2 NON-OPTIONAL (Research Critical)]
+  - [ ] Consolidation trigger: Nightly OR every 1000 new memories
+  - [ ] Similarity-based merging (cosine similarity > 0.95)
+  - [ ] Quality scoring: Quality = Recency × Relevance × Importance
+  - [ ] Automatic pruning (bottom 10% quality removed)
+  - [ ] Archival strategy (top 5% importance → archive storage)
+  - [ ] Conflict resolution via vector similarity voting
+  - [ ] Performance monitoring (consolidation time, memory saved)
+
+- [ ] **Memory Quality Scoring** (`ace_memory/quality_scorer.py`) - 3 days [NEW - MOVED TO MEMORY LAYER]
+  - [ ] Recency scoring (newer memories higher value)
+  - [ ] Relevance scoring (frequency of retrieval)
+  - [ ] Importance scoring (user-marked + system-inferred)
+  - [ ] Combined quality metric: Quality = Recency × Relevance × Importance
+  - [ ] Threshold-based pruning decisions
+
+- [ ] **Pruning Manager** (`ace_memory/pruning_manager.py`) - 2 days [NEW]
+  - [ ] Remove bottom 10% quality entries automatically
+  - [ ] Archive compressed summaries before deletion
+  - [ ] Maintain pruning history log
+  - [ ] Configurable pruning thresholds
 
 #### Knowledge Graph
 - [ ] Design graph schema (entities, relationships, properties)
@@ -2270,6 +2746,45 @@ pytest ace_tools/tests/test_registry.py
 - [ ] Create graph query interface
 - [ ] Build reasoning over graph (inference)
 - [ ] Implement graph visualization
+
+#### Evolution Safety & Stability (NEW - CRITICAL)
+
+> **PHASE 2 – NON-OPTIONAL (Research Critical)**  
+> Memory consolidation prevents unbounded growth. Evolution controller prevents oscillation.  
+> These modules are mandatory before Phase 3.
+
+- [ ] **Test Suite Validator** (`ace_cognitive/test_suite_validator.py`) - 3 days
+  - [ ] Require test cases for all self-generated code
+  - [ ] Run test suite before code registration
+  - [ ] Block registration if tests fail
+  - [ ] Track test coverage per generated skill
+  - [ ] Regression detection (tests that were passing now fail)
+
+- [ ] **Evolution Controller** (`ace_cognitive/evolution_controller.py`) - 5 days
+  - [ ] **MUST consume EvaluationEngine metrics before approving structural change**
+  - [ ] Stability controller: Minimum 3 tasks before next evolution
+  - [ ] Improvement measurement (compare baseline vs. new code)
+  - [ ] Block evolution if performance regression (new_perf <= baseline_perf)
+  - [ ] Automatic rollback on regression
+  - [ ] Track evolution history (what changed, improvement metric)
+  - [ ] Prevent oscillation (same change applied repeatedly)
+  - [ ] Integration with snapshot engine for rollback
+
+**Data Flow Enforcement**:
+```
+EvaluationEngine → performance_delta → EvolutionController
+```
+
+> EvolutionController MUST NOT make evolution decisions based on internal subjective assessment.  
+> All evolution approvals require EvaluationEngine’s performance delta (task success rate, error recovery rate, planning efficiency).  
+> If EvaluationEngine reports regression (Δperf < 0), evolution is BLOCKED regardless of test suite passing.
+
+- [ ] **Tool Misuse Detection** (`ace_tools/misuse_detector.py`) - 4 days
+  - [ ] Detect dangerous tool combinations (e.g., read_file + send_http → exfiltration)
+  - [ ] Track tool call sequences for anomalies
+  - [ ] Block capability chaining attacks
+  - [ ] Log suspicious tool patterns
+  - [ ] Alert on repeated suspicious patterns
 
 ### Required Repos
 - Milvus or Chroma (vector database)
@@ -2286,6 +2801,14 @@ pytest ace_tools/tests/test_registry.py
 - [ ] Skill learning & reuse works
 - [ ] Failure patterns detected correctly
 - [ ] Memory decay calculated properly
+- [ ] **[CONSOLIDATION]** Nightly consolidation reduces redundancy by >30%
+- [ ] **[CONSOLIDATION]** Quality scoring correctly identifies low-value memories
+- [ ] **[CONSOLIDATION]** Merger preserves semantic meaning (>95% similarity preserved)
+- [ ] **[EVOLUTION]** Self-generated code requires passing test suite
+- [ ] **[EVOLUTION]** Regression detection blocks degrading changes
+- [ ] **[EVOLUTION]** Stability controller prevents rapid oscillation
+- [ ] **[EVOLUTION]** Rollback system preserves previous working version
+- [ ] **[MISUSE]** Tool chaining attacks blocked with 100% accuracy
 
 ### Risk Factors
 - Vector database performance with large scale
@@ -2301,60 +2824,68 @@ make test-knowledge-graph
 
 ---
 
-## Phase 3: Self-Evolution Engine
-**Duration**: 3-4 weeks | **Owner**: Structural autonomy
+## Phase 3: Distributed Execution + Byzantine Fault Tolerance
+**Duration**: 3-4 weeks | **Owner**: Structural autonomy + Distributed systems
+
+**MUST INCLUDE (Non-Negotiable - Cannot begin without)**:
+- ✅ ConsensusEngine (`ace_distributed/consensus_engine.py`) - Raft protocol
+- ✅ ByzantineDetector (`ace_distributed/byzantine_detector.py`)
+- ✅ DeadlockDetector (`ace_distributed/deadlock_detector.py`)
+- ✅ Node trust enforcement
+
+> **PHASE 3 MANDATE**: Consensus engine is mandatory before any multi-node deployment. Byzantine fault tolerance is non-negotiable.
 
 ### Goals
-- [ ] Implement code introspection & static analysis
-- [ ] Build refactoring proposal generator
-- [ ] Create auto unit test generation
-- [ ] Implement performance benchmarking
-- [ ] Build architecture comparison system
+- [ ] Implement agent scheduler for multi-agent concurrency
+- [ ] Build consensus protocol (Raft-based) for Byzantine fault tolerance
+- [ ] Create Byzantine failure detection
+- [ ] Implement deadlock detection for distributed agents
+- [ ] Build distributed memory synchronization
 - [ ] Create version branching & rollback
+- [ ] **[CRITICAL]** Implement consensus engine (Raft protocol)
+- [ ] **[CRITICAL]** Design Byzantine detector for malicious nodes
+- [ ] **[CRITICAL]** Build deadlock detector for circular wait conditions
+- [ ] **[NEW]** Implement agent scheduler (multi-agent coordination)
 
 ### Subtasks
 
-#### Codebase Introspection
-- [ ] Implement AST parsing for Python
-- [ ] Create function/class discovery
-- [ ] Build dependency analysis
-- [ ] Implement code complexity metrics
-- [ ] Create documentation extractor
+#### Multi-Agent Scheduler (NEW - CRITICAL)
+- [ ] **Agent Scheduler** (`ace_cognitive/agent_scheduler.py`) - 7 days
+  - [ ] AIOS-inspired priority queue scheduling
+  - [ ] Time-slicing for fair agent execution
+  - [ ] Resource quota enforcement per agent
+  - [ ] Priority-based task assignment
+  - [ ] Dynamic task distribution
+  - [ ] Agent stall detection & recovery
 
-#### Refactoring Engine
-- [ ] Implement dead code detection
-- [ ] Build naming suggestion engine
-- [ ] Create complexity reduction proposals
-- [ ] Implement test coverage analysis
-- [ ] Build test coverage improvement suggestions
+#### Distributed Consensus Protocol (NEW - CRITICAL)
+- [ ] **Consensus Engine** (`ace_distributed/consensus_engine.py`) - 10 days
+  - [ ] Implement Raft leader election
+  - [ ] Log replication across nodes
+  - [ ] Strong consistency guarantees
+  - [ ] Heartbeat-based liveness detection
+  - [ ] Leader failover on crash
+  - [ ] Split-brain prevention
 
-#### Test Generation
-- [ ] Implement function signature analysis
-- [ ] Create test case generation
-- [ ] Build assertion generation
-- [ ] Implement mock object generation
-- [ ] Create test coverage validator
+- [ ] **Byzantine Detector** (`ace_distributed/byzantine_detector.py`) - 7 days
+  - [ ] Detect nodes sending conflicting data
+  - [ ] Majority opinion voting for truth
+  - [ ] Mark suspicious nodes
+  - [ ] Exclude from quorum if Byzantine confirmed
+  - [ ] Log incidents for audit
 
-#### Performance Analysis
-- [ ] Implement profiling integration
-- [ ] Create bottleneck detector
-- [ ] Build algorithm optimization suggestions
-- [ ] Implement memory leak detector
-- [ ] Create performance trend tracking
+- [ ] **Deadlock Detector** (`ace_distributed/deadlock_detector.py`) - 5 days
+  - [ ] Build dependency graph (who waits for whom)
+  - [ ] DFS-based cycle detection
+  - [ ] Force abort youngest task in cycle
+  - [ ] Log deadlock incidents
 
-#### Architecture Comparison
-- [ ] Implement current architecture extraction
-- [ ] Create alternative architecture generation
-- [ ] Build architecture evaluation framework
-- [ ] Implement migration path generator
-- [ ] Create rollback plan generator
-
-#### Version Management
-- [ ] Implement snapshot creation before changes
-- [ ] Create branch management system
-- [ ] Build version comparison interface
-- [ ] Implement rollback executor
-- [ ] Create change verification system
+- [ ] **Distributed Memory Sync** (`ace_distributed/memory_sync.py`) - 7 days (from Phase 5, moved up)
+  - [ ] SEDM pattern (gossip-based propagation)
+  - [ ] Vector similarity voting for conflicts
+  - [ ] Automatic sync of memory updates
+  - [ ] Bandwidth-optimized sync
+  - [ ] Consistency checker
 
 ### Required Repos
 - Semgrep (static analysis)
@@ -2367,22 +2898,31 @@ make test-knowledge-graph
 - Phase 2 (Memory for learning patterns)
 
 ### Acceptance Criteria
-- [ ] Correctly identifies refactoring opportunities
-- [ ] Generates valid unit tests
-- [ ] Performance suggestions are accurate
-- [ ] Rollback restores previous state
-- [ ] Branching prevents main code corruption
+- [ ] **[SCHEDULER]** Round-robin scheduling with proper time-slicing
+- [ ] **[SCHEDULER]** Resource quotas enforced per agent
+- [ ] **[CONSENSUS]** Leader election works correctly
+- [ ] **[CONSENSUS]** Log replication reaches consensus
+- [ ] **[BYZANTINE]** Detects malicious nodes correctly
+- [ ] **[BYZANTINE]** Majority voting prevents single node compromise
+- [ ] **[DEADLOCK]** Circular dependencies detected
+- [ ] **[DEADLOCK]** Deadlock resolution via youngest task abort
+- [ ] **[MEMORY_SYNC]** Memory updates replicate across nodes
+- [ ] **[MEMORY_SYNC]** Conflicts resolved via vector similarity
 
 ### Risk Factors
-- Generated code quality
-- False positive refactoring suggestions
-- Incomplete rollback
+- Scheduler complexity causing hard-to-trace bugs
+- Raft consensus correctness (critical for safety)
+- Byzantine detector false positives
+- Deadlock cycle detection performance
+- Memory sync consistency edge cases
 
 ### Validation Tests
 ```bash
-Make test-refactoring
-pytest ace_evolution/tests/test_code_gen.py
-make test-arch-comparison
+pytest ace_cognitive/tests/test_scheduler.py
+pytest ace_distributed/tests/test_consensus.py
+pytest ace_distributed/tests/test_byzantine.py
+make test-deadlock-detection
+pytest ace_distributed/tests/test_memory_sync.py
 ```
 
 ---
@@ -2469,14 +3009,63 @@ make test-prediction-accuracy
 
 ---
 
+## Phase 4: Code Architecture Analysis (Moved from Phase 3)
+**Duration**: 2-3 weeks | **Owner**: Structural autonomy
+
+### Goals
+- [ ] Implement code introspection & static analysis
+- [ ] Build refactoring proposal generator
+- [ ] Create auto unit test generation
+- [ ] Implement performance benchmarking
+- [ ] Build architecture comparison system
+- [ ] Create version branching & rollback
+
+### Subtasks
+
+#### Codebase Introspection
+- [ ] Implement AST parsing for Python
+- [ ] Create function/class discovery
+- [ ] Build dependency analysis
+- [ ] Implement code complexity metrics
+- [ ] Create documentation extractor
+
+#### Refactoring Engine
+- [ ] Implement dead code detection
+- [ ] Build naming suggestion engine
+- [ ] Create complexity reduction proposals
+- [ ] Implement test coverage analysis
+- [ ] Build test coverage improvement suggestions
+
+#### Test Generation
+- [ ] Implement function signature analysis
+- [ ] Create test case generation
+- [ ] Build assertion generation
+- [ ] Implement mock object generation
+- [ ] Create test coverage validator
+
+#### Performance Analysis
+- [ ] Implement profiling integration
+- [ ] Create bottleneck detector
+- [ ] Build algorithm optimization suggestions
+- [ ] Implement memory leak detector
+- [ ] Create performance trend tracking
+
+#### Architecture Comparison
+- [ ] Implement current architecture extraction
+- [ ] Create alternative architecture generation
+- [ ] Build architecture evaluation framework
+- [ ] Implement migration path generator
+- [ ] Create rollback plan generator
+
+---
+
 ## Phase 5: Distributed Ecosystem
 **Duration**: 3 weeks | **Owner**: Multi-device orchestration
 
 ### Goals
 - [ ] Implement node registry & discovery
 - [ ] Build SSH orchestration system
-- [ ] Create cross-device memory sync
-- [ ] Implement task delegation engine
+- [ ] Implement task delegation engine (note: consensus already in Phase 3)
 - [ ] Create distributed execution framework
 - [ ] Build node health monitoring
 
@@ -2497,11 +3086,10 @@ make test-prediction-accuracy
 - [ ] Create SSH session logging
 
 #### Memory Synchronization
-- [ ] Implement distributed vector database sync
-- [ ] Create conflict resolution strategy
-- [ ] Build priority-based sync scheduling
-- [ ] Implement bandwidth optimization
-- [ ] Create consistency checker
+- [ ] Distributed memory sync already implemented in Phase 3
+- [ ] Node-level memory replication using consensus
+- [ ] Implement local vector database per node
+- [ ] Build bandwidth optimization for large syncs
 
 #### Task Delegation
 - [ ] Implement task distribution algorithm
@@ -2530,8 +3118,9 @@ make test-prediction-accuracy
 - Consul / etcd (distributed discovery, optional)
 
 ### Dependencies
-- Phase 1 (Tool system)
-- Phase 2 (Memory system)
+- Phase 1 (Kernel & Governance Foundation complete)
+- Phase 2 (Memory architecture + Evolution hardening complete)
+- Phase 3 (Distributed consensus + Byzantine tolerance complete)
 
 ### Acceptance Criteria
 - [ ] Node discovery works automatically
@@ -2640,21 +3229,80 @@ pytest ace_kernel/tests/test_audit_trail.py
 
 ## Phase Transitions & Gating
 
+**UPDATED: Critical gates from ACE_RESEARCH_INTEGRATION_REPORT now enforced**
+
 ```
-Phase 0 (Foundation) ✓ (Ready to start)
-    ↓ [Approval: All tests pass]
-Phase 1 (Core Engine) 
-    ↓ [Approval: Basic task execution works]
-Phase 2 (Memory)
-    ↓ [Approval: Memory retrieval gives relevant results]
-Phase 3 (Self-Evolution)
-    ↓ [Approval: Generated code is safe & valid]
-Phase 4 (Proactive Intelligence)
-    ↓ [Approval: Predictions accurate >70%]
-Phase 5 (Distributed)
-    ↓ [Approval: Multi-node execution works reliably]
-Phase 6 (Nuclear) [Manual authorization only]
+Phase 0 (Foundation) ✓ (Complete)
+    ✓ All tests pass
+    ✓ Project structure established
+    ✓ Documentation framework in place
+    ↓ [GATE: Ready for security hardening]
+
+Phase 1 (Core Engine + Security Hardening) [CURRENT]
+    CRITICAL REQUIREMENTS (cannot proceed to Phase 2 without):
+    ✅ Prompt injection defense (NX-bit) working correctly
+    ✅ Behavioral anomaly detection monitoring all tools
+    ✅ Nuclear mode controller functional with passphrase protection
+    ✅ Resource quota manager enforcing adaptive modes
+    ✅ Evaluation engine recording cognitive metrics
+    ✅ Basic task execution validated
+    ✅ 57+ tests passing (all security tests included)
+    ✅ Security audit clearance (no injection/anomaly bypasses)
+    ↓ [GATE: Security hardening complete + Performance baseline established]
+
+Phase 2 (Memory + Evolution Governance)
+    CRITICAL REQUIREMENTS (cannot proceed to Phase 3 without):
+    ✅ Memory consolidation loop working (nightly merges)
+    ✅ Quality scoring correctly identifies low-value memories
+    ✅ Evolution controller prevents regression (>5% drop blocks changes)
+    ✅ Test suite validator mandatory for self-generated code
+    ✅ Stability controller enforces min 3-task wait between evolutions
+    ✅ Tool misuse detection blocking capability chains
+    ✅ Memory system tested with 10k+ items
+    ↓ [GATE: Self-evolution proven safe + Memory stability validated]
+
+Phase 3 (Multi-Agent Coordination + Distributed Governance)
+    CRITICAL REQUIREMENTS (cannot proceed to Phase 4 without):
+    ✅ Consensus engine (Raft) leader election working
+    ✅ Byzantine detector identifying malicious nodes (>90% accuracy)
+    ✅ Deadlock detector resolving circular dependencies
+    ✅ Distributed memory sync via consensus
+    ✅ Agent scheduler with time-slicing and quotas
+    ✅ Multi-node execution tested (3+ nodes)
+    ✅ Network partition handling (minority nodes → read-only)
+    ↓ [GATE: Distributed Byzantine fault tolerance proven]
+
+Phase 4 (Code Architecture Analysis)
+    ✅ Architecture extraction from codebase
+    ✅ Refactoring proposals validated
+    ✅ Test generation working
+    ✓ Performance optimization suggestions
+    ↓ [GATE: Structural self-improvement ready]
+
+Phase 5 (Distributed Ecosystem + OSINT)
+    ✅ Node registry + discovery functional
+    ✅ SSH orchestration secure + auditable
+    ✅ Task delegation with capability matching
+    ✅ Health monitoring and auto-recovery
+    ↓ [GATE: Multi-device orchestration proven]
+
+Phase 6 (Controlled Nuclear Capability) [MANUAL AUTHORIZATION ONLY]
+    CRITICAL REQUIREMENTS (requires explicit admin approval):
+    ✅ Hardware security token binding (TPM or hardware token)
+    ✅ Multi-factor authentication (MFA) for activation
+    ✅ Nuclear authorization framework complete
+    ✅ Immutable audit trail for all nuclear actions
+    ✅ Full system snapshot before any nuclear action
+    ✅ Rollback capability tested and verified
+    ⚠️  Manual security review required before deployment
+    ⚠️  Admin must sign off on all nuclear actions
 ```
+
+**Key Policy Changes**:
+- **Security First**: Phase 1 cannot be skipped; all security modules are critical path
+- **Governance Always**: No phase can disable audit trail, snapshots, or consensus
+- **Testing Mandatory**: Phase 2+ require test suites for self-generated code
+- **Distributed Safety**: Phase 3 requires Byzantine fault tolerance (no exceptions)
 
 ---
 
