@@ -4,18 +4,18 @@
 import time
 import psutil
 from pathlib import Path
-from datetime import datetime, timedelta, timezone
+from typing import Any
 import shutil
 
 from ace.ace_memory.memory_store import MemoryStore
-from ace.ace_memory.memory_schema import MemoryEntry, MemoryType
 from ace.ace_memory.quality_scorer import QualityScorer
 from ace.ace_memory.episodic_memory import EpisodicMemory
 from ace.ace_memory.consolidation_engine import ConsolidationEngine
 from ace.ace_kernel.audit_trail import AuditTrail
+from ace.ace_diagnostics.evaluation_engine import EvaluationEngine
 
 
-def benchmark_phase2b(num_tasks: int = 100) -> dict:
+def benchmark_phase2b(num_tasks: int = 100) -> dict[str, float | int | dict[str, Any]]:
     """Run Phase 2B performance benchmark with hierarchical indexing."""
     
     # Use fixed directory to avoid Windows locking issues with tempfolder
@@ -27,7 +27,8 @@ def benchmark_phase2b(num_tasks: int = 100) -> dict:
     try:
         # Initialize components
         store = MemoryStore(bench_dir / "memory.db")
-        scorer = QualityScorer(store)
+        evaluation_engine = EvaluationEngine()
+        scorer = QualityScorer(evaluation_engine)
         episodic = EpisodicMemory(store)
         audit = AuditTrail(bench_dir / "audit.jsonl")
         consolidator = ConsolidationEngine(store, episodic, scorer, audit)
@@ -38,7 +39,6 @@ def benchmark_phase2b(num_tasks: int = 100) -> dict:
         
         # Benchmark: Record entries
         start = time.perf_counter()
-        now = datetime.now(timezone.utc)
         entries_recorded = 0
         
         for task_idx in range(num_tasks):
@@ -46,8 +46,7 @@ def benchmark_phase2b(num_tasks: int = 100) -> dict:
             
             # Mix of hot, warm, cold entries
             for entry_idx in range(10):
-                age_days = [0, 5, 35][entry_idx % 3]  # Hot, warm, cold
-                timestamp = now - timedelta(days=age_days)
+                # Note: EpisodicMemory categorizes entries by recency tier
                 
                 result = episodic.record(
                     task_id,
@@ -98,7 +97,7 @@ def benchmark_phase2b(num_tasks: int = 100) -> dict:
                 pass  # Ignore cleanup errors on Windows
 
 
-def main():
+def main() -> None:
     """Run benchmark and report results."""
     print("=" * 70)
     print("PHASE 2B PERFORMANCE BENCHMARK")
@@ -108,11 +107,6 @@ def main():
     # Run benchmark
     print("Running Phase 2B benchmark with 100 tasks × 10 entries = 1000 total entries...")
     results = benchmark_phase2b(num_tasks=100)
-    
-    if results is None:
-        print("⚠  Benchmark encountered database lock (cleanup issue)")
-        print("✅ Phase 2B implementation is complete")
-        return
     
     print()
     print("PERFORMANCE METRICS:")
@@ -129,17 +123,21 @@ def main():
     print(f"  Memory Before: {results['memory_mb_before']:.2f} MB")
     print(f"  Memory After: {results['memory_mb_after']:.2f} MB")
     print(f"  Memory Increase: {results['memory_increase_mb']:.2f} MB")
-    print(f"  Per Entry: {(results['memory_increase_mb'] / results['num_entries']) * 1024:.2f} KB")
+    mem_increase = results['memory_increase_mb']
+    num_entries = results['num_entries']
+    if isinstance(mem_increase, (int, float)) and isinstance(num_entries, (int, float)):
+        print(f"  Per Entry: {(mem_increase / num_entries) * 1024:.2f} KB")
     print()
     
     print("HIERARCHICAL INDEX STATS:")
     print("-" * 70)
     stats = results['index_stats']
-    print(f"  Task Index Size: {stats['task_index_size']}")
-    print(f"  Hot Tier (< 7 days): {stats['hot_tier_count']}")
-    print(f"  Warm Tier (7-30 days): {stats['warm_tier_count']}")
-    print(f"  Cold Tier (> 30 days): {stats['cold_tier_count']}")
-    print(f"  Total Indexed: {stats['total_indexed']}")
+    if isinstance(stats, dict):
+        print(f"  Task Index Size: {stats.get('task_index_size', 'N/A')}")
+        print(f"  Hot Tier (< 7 days): {stats.get('hot_tier_count', 'N/A')}")
+        print(f"  Warm Tier (7-30 days): {stats.get('warm_tier_count', 'N/A')}")
+        print(f"  Cold Tier (> 30 days): {stats.get('cold_tier_count', 'N/A')}")
+        print(f"  Total Indexed: {stats.get('total_indexed', 'N/A')}")
     print()
     
     print("=" * 70)

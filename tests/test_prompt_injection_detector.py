@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from pathlib import Path
 
 from ace.ace_kernel.audit_trail import AuditTrail
 from ace.ace_kernel.prompt_injection_detector import PromptInjectionDetector
@@ -12,7 +13,7 @@ def _fixed_time() -> datetime:
     return datetime(2026, 2, 27, 12, 0, 0, tzinfo=timezone.utc)
 
 
-def test_detects_injection_patterns(tmp_path) -> None:
+def test_detects_injection_patterns(tmp_path: Path) -> None:
     audit = AuditTrail(tmp_path / "audit.jsonl", time_fn=_fixed_time)
     detector = PromptInjectionDetector(audit)
 
@@ -24,7 +25,7 @@ def test_detects_injection_patterns(tmp_path) -> None:
     assert audit.verify_chain() is True
 
 
-def test_trusted_segments_are_excluded(tmp_path) -> None:
+def test_trusted_segments_are_excluded(tmp_path: Path) -> None:
     audit = AuditTrail(tmp_path / "audit.jsonl", time_fn=_fixed_time)
     detector = PromptInjectionDetector(audit)
 

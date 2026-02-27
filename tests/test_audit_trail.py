@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from pathlib import Path
 
 from ace.ace_kernel.audit_trail import AuditTrail
 
@@ -11,7 +12,7 @@ def _fixed_time() -> datetime:
     return datetime(2026, 2, 27, 12, 0, 0, tzinfo=timezone.utc)
 
 
-def test_append_and_verify_chain(tmp_path) -> None:
+def test_append_and_verify_chain(tmp_path: Path) -> None:
     audit_file = tmp_path / "audit.jsonl"
     trail = AuditTrail(audit_file, time_fn=_fixed_time)
 
@@ -23,7 +24,7 @@ def test_append_and_verify_chain(tmp_path) -> None:
     assert trail.verify_chain() is True
 
 
-def test_chain_detects_tamper(tmp_path) -> None:
+def test_chain_detects_tamper(tmp_path: Path) -> None:
     audit_file = tmp_path / "audit.jsonl"
     trail = AuditTrail(audit_file, time_fn=_fixed_time)
 

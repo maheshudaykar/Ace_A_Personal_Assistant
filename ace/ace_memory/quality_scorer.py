@@ -53,25 +53,25 @@ class QualityScorer:
         now = reference_time or datetime.now(timezone.utc)
         age_seconds = (now - timestamp).total_seconds()
         age_days = age_seconds / 86400.0
-        
+
         # Cache by whole days to reduce exp() calls
         age_days_bucket = int(age_days)
-        
+
         if age_days_bucket in self._recency_cache:
             return self._recency_cache[age_days_bucket]
-        
+
         # Exponential decay: e^(-age_days / 30)
         # Recent entries (0 days) → 1.0
         # Old entries (90+ days) → ~0.05
         decay_constant = 30.0
         recency = math.exp(-age_days / decay_constant)
         recency = max(0.0, min(1.0, recency))
-        
+
         # Cache result (evict oldest if at capacity)
         if len(self._recency_cache) >= self._max_cache_size:
             self._recency_cache.popitem(last=False)
         self._recency_cache[age_days_bucket] = recency
-        
+
         return recency
 
     def score_with_explanation(self, entry: MemoryEntry) -> Dict[str, float]:
@@ -101,11 +101,13 @@ class QualityScorer:
             "total": max(0.0, min(1.0, total))
         }
 
-    def score_batch(self, entries: List[MemoryEntry], reference_time: datetime | None = None) -> List[Tuple[MemoryEntry, float]]:
+    def score_batch(
+        self, entries: List[MemoryEntry], reference_time: datetime | None = None
+    ) -> List[Tuple[MemoryEntry, float]]:
         """Batch score entries with single datetime.now() call."""
         # Compute reference time once
         ref_time = reference_time or datetime.now(timezone.utc)
-        
+
         scored: List[Tuple[MemoryEntry, float]] = []
         for entry in entries:
             importance_weight = 0.4
@@ -124,9 +126,9 @@ class QualityScorer:
                 access_frequency_weight * access_freq +
                 task_success_weight * task_success
             )
-            
+
             scored.append((entry, max(0.0, min(1.0, quality_score))))
-        
+
         return scored
 
     def _compute_task_success_bonus(self, task_id: str) -> float:

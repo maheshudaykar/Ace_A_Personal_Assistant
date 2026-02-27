@@ -231,21 +231,21 @@ class TestMemoryStore:
         store.save(entry2)
         
         # Load both tasks (populate cache)
-        task1_entries = store.load_by_task("task1")
-        task2_entries = store.load_by_task("task2")
+        task1_entries = store.load_by_task("task1")  # noqa: F841
+        task2_entries = store.load_by_task("task2")  # noqa: F841
         
         # Verify both cached
-        assert store._cache.get("task:task1") is not None
-        assert store._cache.get("task:task2") is not None
+        assert store._cache.get("task:task1") is not None  # noqa: SLF001
+        assert store._cache.get("task:task2") is not None  # noqa: SLF001
         
         # Save new entry for task1
         entry3 = MemoryEntry(task_id="task1", content="content3")
         store.save(entry3)
         
         # task1 cache should be invalidated
-        assert store._cache.get("task:task1") is None
+        assert store._cache.get("task:task1") is None  # noqa: SLF001
         # task2 cache should still exist (selective invalidation)
-        assert store._cache.get("task:task2") is not None
+        assert store._cache.get("task:task2") is not None  # noqa: SLF001
 
 
 class TestEpisodicMemory:
@@ -256,6 +256,7 @@ class TestEpisodicMemory:
         episodic = EpisodicMemory(store)
         
         entry = episodic.record("task1", "test content", importance_score=0.7)
+        assert entry is not None  # entry passes write gate
         assert entry.task_id == "task1"
         assert entry.memory_type == MemoryType.EPISODIC
         
@@ -368,7 +369,7 @@ class TestQualityScorer:
         score2 = scorer.score(entry2)
         
         # Cache should have entry for day bucket 5
-        assert 5 in scorer._recency_cache
+        assert 5 in scorer._recency_cache  # noqa: SLF001
         
         # Scores should be identical (same recency component)
         # but may differ slightly due to other factors

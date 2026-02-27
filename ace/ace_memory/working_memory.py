@@ -39,12 +39,12 @@ class WorkingMemory:
         """Add entry to working memory (oldest evicted if at capacity)."""
         if entry.memory_type != MemoryType.WORKING:
             entry.memory_type = MemoryType.WORKING
-        
+
         with self._lock:
             # Track eviction if at capacity
             if len(self._buffer) == self._max_capacity:
                 self._total_evictions += 1
-            
+
             self._buffer.append(entry)
             self._total_additions += 1
 
@@ -60,7 +60,7 @@ class WorkingMemory:
             # Track eviction if at capacity
             if len(self._buffer) == self._max_capacity:
                 self._total_evictions += 1
-            
+
             self._buffer.append(entry)
             self._total_additions += 1
 

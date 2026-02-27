@@ -29,7 +29,7 @@ class PruningManager:
     def prune(self, prune_percentage: float = 0.1) -> int:
         """Prune bottom percentage of entries by quality score."""
         active_entries = self._store.load_active()
-        
+
         if len(active_entries) == 0:
             return 0
 

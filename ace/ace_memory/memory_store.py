@@ -15,12 +15,12 @@ from ace.ace_memory.memory_schema import MemoryEntry
 
 class LRUCache:
     """Simple LRU cache for memory entries."""
-    
+
     def __init__(self, maxsize: int = 100) -> None:
         self._cache: OrderedDict[str, List[MemoryEntry]] = OrderedDict()
         self._maxsize = maxsize
         self._lock = threading.Lock()
-    
+
     def get(self, key: str) -> List[MemoryEntry] | None:
         """Get cached value and move to end (most recently used)."""
         with self._lock:
@@ -29,7 +29,7 @@ class LRUCache:
                 self._cache.move_to_end(key)
                 return self._cache[key]
             return None
-    
+
     def put(self, key: str, value: List[MemoryEntry]) -> None:
         """Add value to cache, evicting oldest if at capacity."""
         with self._lock:
@@ -43,7 +43,7 @@ class LRUCache:
                     # Evict oldest
                     self._cache.popitem(last=False)
                 self._cache[key] = value
-    
+
     def invalidate(self) -> None:
         """Clear entire cache (on writes)."""
         with self._lock:
@@ -85,7 +85,7 @@ class MemoryStore:
         cached = self._cache.get(cache_key)
         if cached is not None:
             return cached
-        
+
         with self._lock:
             self._handle.flush()
             result = self._load_all_unsafe()
@@ -116,7 +116,7 @@ class MemoryStore:
         cached = self._cache.get(cache_key)
         if cached is not None:
             return cached
-        
+
         result = [entry for entry in self.load_all() if entry.task_id == task_id]
         self._cache.put(cache_key, result)
         return result
@@ -127,7 +127,7 @@ class MemoryStore:
         cached = self._cache.get(cache_key)
         if cached is not None:
             return cached
-        
+
         result = [entry for entry in self.load_all() if not entry.archived]
         self._cache.put(cache_key, result)
         return result
@@ -136,21 +136,21 @@ class MemoryStore:
         """Mark entries as archived (no in-place modification, invalidates cache)."""
         ids_to_prune = set(entry_ids)
         pruned_count = 0
-        
+
         with self._lock:
             self._handle.flush()
             all_entries = self._load_all_unsafe()
-            
+
             for entry in all_entries:
                 if entry.id in ids_to_prune and not entry.archived:
                     entry.archived = True
                     # Write directly without acquiring lock again
                     self._write_entry_unsafe(entry)
                     pruned_count += 1
-            
+
             # Invalidate cache after pruning
             self._cache.invalidate()
-        
+
         return pruned_count
 
     def _invalidate_selective(self, entry: MemoryEntry) -> None:

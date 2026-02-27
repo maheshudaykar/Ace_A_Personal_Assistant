@@ -3,18 +3,19 @@
 from __future__ import annotations
 
 import asyncio
+from typing import Any, NoReturn
 
 import pytest
 
-from ace.ace_core.event_bus import EventBus
+from ace.ace_core.event_bus import EventBus, Event
 
 
 @pytest.mark.asyncio
 async def test_event_bus_dispatches() -> None:
     bus = EventBus()
-    results = []
+    results: list[Any] = []
 
-    def handler(event):
+    def handler(event: Event) -> None:
         results.append(event.payload["value"])
 
     bus.subscribe("test", handler)
@@ -30,7 +31,7 @@ async def test_event_bus_dispatches() -> None:
 async def test_event_bus_dead_letter() -> None:
     bus = EventBus()
 
-    def handler(_event):
+    def handler(_event: Event) -> NoReturn:
         raise RuntimeError("boom")
 
     bus.subscribe("test", handler)

@@ -38,17 +38,17 @@ class ConsolidationEngine:
     def consolidate(self, merge_threshold: float = 0.85) -> int:
         """
         Perform memory consolidation with deterministic similarity-based merging.
-        
+
         Returns count of merged entries.
         """
         active_entries = self._episodic.retrieve_all_active()
-        
+
         if len(active_entries) == 0:
             return 0
 
         # Score all entries
         scored_entries = [(entry, self._scorer.score(entry)) for entry in active_entries]
-        
+
         # Stable sort: by score DESC, then by ID ASC (deterministic ordering)
         scored_entries.sort(key=lambda x: (-x[1], str(x[0].id)))
 
@@ -101,7 +101,7 @@ class ConsolidationEngine:
     def _compute_similarity(self, entry1: MemoryEntry, entry2: MemoryEntry) -> float:
         """
         Compute deterministic similarity between two entries.
-        
+
         Uses:
         - Cosine similarity if both have embeddings
         - Text similarity (difflib) otherwise
@@ -109,12 +109,12 @@ class ConsolidationEngine:
         # Prefer embeddings (deterministic, vectorized)
         if entry1.embedding and entry2.embedding:
             return self._cosine_similarity(entry1.embedding, entry2.embedding)
-        
+
         # Fallback to text similarity (deterministic difflib)
         # Normalize: both are lowercased
         text1 = entry1.content.lower()
         text2 = entry2.content.lower()
-        
+
         # difflib.SequenceMatcher is deterministic
         matcher = difflib.SequenceMatcher(None, text1, text2)
         return matcher.ratio()
@@ -136,7 +136,7 @@ class ConsolidationEngine:
     def _merge_entries(self, entries: List[MemoryEntry]) -> MemoryEntry:
         """
         Merge multiple similar entries into a consolidated summary.
-        
+
         Specifications:
         - Type: CONSOLIDATED
         - Content: Concatenate first 3 entries (deterministic)

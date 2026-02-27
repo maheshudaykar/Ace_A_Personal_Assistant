@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
-from uuid import UUID
+from pathlib import Path
 
 import pytest
 
@@ -13,42 +13,44 @@ from ace.ace_memory.memory_schema import MemoryEntry, MemoryType
 from ace.ace_memory.memory_store import MemoryStore
 from ace.ace_memory.quality_scorer import QualityScorer
 from ace.ace_kernel.audit_trail import AuditTrail
+from ace.ace_diagnostics.evaluation_engine import EvaluationEngine
 
 
 @pytest.fixture
-def tmp_memory_store(tmp_path):
+def tmp_memory_store(tmp_path: Path) -> MemoryStore:
     """Create a temporary memory store for testing."""
     store = MemoryStore(tmp_path / "memory.db")
     return store
 
 
 @pytest.fixture
-def audit_trail(tmp_path):
+def audit_trail(tmp_path: Path) -> AuditTrail:
     """Create an audit trail for testing."""
     audit_file = tmp_path / "audit.jsonl"
     return AuditTrail(audit_file)
 
 
 @pytest.fixture
-def quality_scorer(tmp_memory_store):
+def quality_scorer() -> QualityScorer:
     """Create a quality scorer for testing."""
-    return QualityScorer(tmp_memory_store)
+    evaluation_engine = EvaluationEngine()
+    return QualityScorer(evaluation_engine)
 
 
 @pytest.fixture
-def episodic_memory_instance(tmp_memory_store):
+def episodic_memory_instance(tmp_memory_store: MemoryStore) -> EpisodicMemory:
     """Create episodic memory for testing (avoid name collision with param)."""
     return EpisodicMemory(tmp_memory_store)
 
 
 @pytest.fixture
-def consolidation_engine(tmp_memory_store, episodic_memory_instance, quality_scorer, audit_trail):
+def consolidation_engine(tmp_memory_store: MemoryStore, episodic_memory_instance: EpisodicMemory, quality_scorer: QualityScorer, audit_trail: AuditTrail) -> ConsolidationEngine:
     """Create a consolidation engine for testing."""
     return ConsolidationEngine(tmp_memory_store, episodic_memory_instance, quality_scorer, audit_trail)
 
 
 @pytest.fixture
-def episodic_memory(tmp_memory_store):
+def episodic_memory(tmp_memory_store: MemoryStore) -> EpisodicMemory:
     """Create episodic memory for testing."""
     return EpisodicMemory(tmp_memory_store)
 
@@ -79,7 +81,6 @@ def test_similarity_merge_same_content(consolidation_engine: ConsolidationEngine
     
     # Verify entries were marked as archived
     all_entries = tmp_memory_store.load_active()
-    entry_contents = [e.content for e in all_entries]
     
     # Should have consolidated entry (identical text merges)
     assert any(e.memory_type == MemoryType.CONSOLIDATED for e in all_entries)
@@ -204,15 +205,15 @@ def test_task_index_updates(episodic_memory: EpisodicMemory):
     assert stats["task_index_size"] == 2
     
     # Verify internal task index
-    assert "task1" in episodic_memory._task_index
-    assert "task2" in episodic_memory._task_index
+    assert "task1" in episodic_memory._task_index  # noqa: SLF001
+    assert "task2" in episodic_memory._task_index  # noqa: SLF001
     
     if entry1:
-        assert entry1.id in episodic_memory._task_index["task1"]
+        assert entry1.id in episodic_memory._task_index["task1"]  # noqa: SLF001
     if entry2:
-        assert entry2.id in episodic_memory._task_index["task1"]
+        assert entry2.id in episodic_memory._task_index["task1"]  # noqa: SLF001
     if entry3:
-        assert entry3.id in episodic_memory._task_index["task2"]
+        assert entry3.id in episodic_memory._task_index["task2"]  # noqa: SLF001
 
 
 def test_recency_tier_assignment(episodic_memory_instance: EpisodicMemory):
@@ -228,8 +229,8 @@ def test_recency_tier_assignment(episodic_memory_instance: EpisodicMemory):
         memory_type=MemoryType.EPISODIC,
         timestamp=now,
     )
-    episodic_memory_instance._store.save(entry_hot_obj)
-    episodic_memory_instance._update_recency_tier(entry_hot_obj)
+    episodic_memory_instance._store.save(entry_hot_obj)  # noqa: SLF001
+    episodic_memory_instance._update_recency_tier(entry_hot_obj)  # noqa: SLF001
     
     # Warm entry (5 days old)
     entry_warm_obj = MemoryEntry(
@@ -239,8 +240,8 @@ def test_recency_tier_assignment(episodic_memory_instance: EpisodicMemory):
         memory_type=MemoryType.EPISODIC,
         timestamp=now - timedelta(days=15),  # Use 15 days to ensure it's in warm tier
     )
-    episodic_memory_instance._store.save(entry_warm_obj)
-    episodic_memory_instance._update_recency_tier(entry_warm_obj)
+    episodic_memory_instance._store.save(entry_warm_obj)  # noqa: SLF001
+    episodic_memory_instance._update_recency_tier(entry_warm_obj)  # noqa: SLF001
     
     # Cold entry (40 days old)
     entry_cold_obj = MemoryEntry(
@@ -250,13 +251,13 @@ def test_recency_tier_assignment(episodic_memory_instance: EpisodicMemory):
         memory_type=MemoryType.EPISODIC,
         timestamp=now - timedelta(days=40),
     )
-    episodic_memory_instance._store.save(entry_cold_obj)
-    episodic_memory_instance._update_recency_tier(entry_cold_obj)
+    episodic_memory_instance._store.save(entry_cold_obj)  # noqa: SLF001
+    episodic_memory_instance._update_recency_tier(entry_cold_obj)  # noqa: SLF001
     
     # Verify tier assignments
-    assert entry_hot_obj.id in episodic_memory_instance._recency_tiers["hot"]
-    assert entry_warm_obj.id in episodic_memory_instance._recency_tiers["warm"]
-    assert entry_cold_obj.id in episodic_memory_instance._recency_tiers["cold"]
+    assert entry_hot_obj.id in episodic_memory_instance._recency_tiers["hot"]  # noqa: SLF001
+    assert entry_warm_obj.id in episodic_memory_instance._recency_tiers["warm"]  # noqa: SLF001
+    assert entry_cold_obj.id in episodic_memory_instance._recency_tiers["cold"]  # noqa: SLF001
 
 
 def test_retrieve_top_k_prefers_hot(episodic_memory_instance: EpisodicMemory, quality_scorer: QualityScorer):
@@ -264,7 +265,7 @@ def test_retrieve_top_k_prefers_hot(episodic_memory_instance: EpisodicMemory, qu
     now = datetime.now(timezone.utc)
     
     # Create entries across tiers
-    entries = []
+    entries: list[MemoryEntry] = []
     
     # Hot entries (should be retrieved first)
     for i in range(3):
@@ -287,8 +288,8 @@ def test_retrieve_top_k_prefers_hot(episodic_memory_instance: EpisodicMemory, qu
             timestamp=now - timedelta(days=10),
             embedding=[float(j) for j in range(10)],
         )
-        episodic_memory_instance._store.save(warm_entry)
-        episodic_memory_instance._update_recency_tier(warm_entry)
+        episodic_memory_instance._store.save(warm_entry)  # noqa: SLF001
+        episodic_memory_instance._update_recency_tier(warm_entry)  # noqa: SLF001
         entries.append(warm_entry)
     
     # Retrieve top-3
@@ -298,18 +299,15 @@ def test_retrieve_top_k_prefers_hot(episodic_memory_instance: EpisodicMemory, qu
     assert len(top_k) <= 3
     
     # At least some should be hot tier (if available)
-    hot_entries = [e for e in top_k if e.id in episodic_memory_instance._recency_tiers["hot"]]
+    hot_entries = [e for e in top_k if e.id in episodic_memory_instance._recency_tiers["hot"]]  # noqa: SLF001
     assert len(hot_entries) > 0
 
 
 def test_index_consistency_after_prune(episodic_memory: EpisodicMemory, tmp_memory_store: MemoryStore):
     """Test: Indices remain consistent after pruning entries."""
     entry1 = episodic_memory.record("task1", "Entry 1", importance_score=0.8)
-    entry2 = episodic_memory.record("task1", "Entry 2", importance_score=0.9)
-    entry3 = episodic_memory.record("task2", "Entry 3", importance_score=0.7)
-    
-    # Record initial sizes
-    initial_hot = len(episodic_memory._recency_tiers["hot"])
+    _entry2 = episodic_memory.record("task1", "Entry 2", importance_score=0.9)  # noqa: F841
+    _entry3 = episodic_memory.record("task2", "Entry 3", importance_score=0.7)  # noqa: F841
     
     # Archive entry1
     if entry1:
@@ -317,19 +315,16 @@ def test_index_consistency_after_prune(episodic_memory: EpisodicMemory, tmp_memo
     
     # Verify entry1 is removed from indices
     if entry1:
-        assert entry1.id not in episodic_memory._recency_tiers["hot"]
-        assert entry1.id not in episodic_memory._recency_tiers["warm"]
-        assert entry1.id not in episodic_memory._recency_tiers["cold"]
+        assert entry1.id not in episodic_memory._recency_tiers["hot"]  # noqa: SLF001
+        assert entry1.id not in episodic_memory._recency_tiers["warm"]  # noqa: SLF001
+        assert entry1.id not in episodic_memory._recency_tiers["cold"]  # noqa: SLF001
 
 
 def test_index_consistency_after_consolidation(episodic_memory_instance: EpisodicMemory, consolidation_engine: ConsolidationEngine, tmp_memory_store: MemoryStore):
     """Test: Indices track consolidated entries correctly."""
     # Create entries
-    entry1 = episodic_memory_instance.record("task1", "Content A", importance_score=0.8)
-    entry2 = episodic_memory_instance.record("task1", "Content A", importance_score=0.9)
-    
-    # Initial index state
-    initial_size = len(episodic_memory_instance._recency_tiers["hot"])
+    _entry1 = episodic_memory_instance.record("task1", "Content A", importance_score=0.8)  # noqa: F841
+    _entry2 = episodic_memory_instance.record("task1", "Content A", importance_score=0.9)  # noqa: F841
     
     # Consolidate
     consolidation_engine.consolidate()
@@ -349,7 +344,7 @@ def test_index_consistency_after_consolidation(episodic_memory_instance: Episodi
 def test_full_workflow_consolidation_and_retrieval(episodic_memory_instance: EpisodicMemory, consolidation_engine: ConsolidationEngine, quality_scorer: QualityScorer, tmp_memory_store: MemoryStore):
     """Test: Full workflow of recording, consolidating, and retrieving entries."""
     # Record entries with high importance scores to pass write gate
-    entries = []
+    entries: list[MemoryEntry] = []
     for i in range(5):
         e = episodic_memory_instance.record(f"task{i // 2}", f"Entry {i}", importance_score=0.8 + i * 0.02)
         if e:
