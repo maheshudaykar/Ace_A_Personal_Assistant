@@ -49,6 +49,12 @@ class LRUCache:
         with self._lock:
             self._cache.clear()
 
+    def delete(self, key: str) -> None:
+        """Delete a specific cache key."""
+        with self._lock:
+            if key in self._cache:
+                del self._cache[key]
+
 
 class MemoryStore:
     """Append-only JSONL storage for memory entries with read-ahead caching."""
@@ -67,11 +73,11 @@ class MemoryStore:
         self._handle = self._path.open("a", encoding="utf-8")
 
     def save(self, entry: MemoryEntry) -> None:
-        """Append a memory entry to storage (invalidates cache)."""
+        """Append a memory entry to storage (selective cache invalidation)."""
         with self._lock:
             self._write_entry_unsafe(entry)
-            # Invalidate cache on writes to maintain consistency
-            self._cache.invalidate()
+            # Selective cache invalidation - only invalidate affected keys
+            self._invalidate_selective(entry)
 
     def load_all(self) -> List[MemoryEntry]:
         """Load all memory entries from storage (cached)."""
@@ -146,6 +152,13 @@ class MemoryStore:
             self._cache.invalidate()
         
         return pruned_count
+
+    def _invalidate_selective(self, entry: MemoryEntry) -> None:
+        """Selectively invalidate cache keys affected by this entry."""
+        # Only invalidate "all" and task-specific cache
+        keys_to_invalidate = ["all", f"task:{entry.task_id}", "active"]
+        for key in keys_to_invalidate:
+            self._cache.delete(key)
 
     def _write_entry_unsafe(self, entry: MemoryEntry) -> None:
         """Write entry with hash wrapper (internal use only)."""

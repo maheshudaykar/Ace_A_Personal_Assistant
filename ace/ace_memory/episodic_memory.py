@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import time
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING, List
+from typing import TYPE_CHECKING, Any, Dict, List
 from uuid import UUID
 
 from ace.ace_memory.memory_schema import MemoryEntry, MemoryType
@@ -27,6 +28,16 @@ class EpisodicMemory:
         self._store = memory_store
         self._write_threshold = write_threshold
         self._filtered_count = 0  # Track how many entries were filtered
+        
+        # Retrieval statistics (no behavioral changes)
+        self._stats: Dict[str, Any] = {
+            "total_by_task": 0,
+            "total_all_active": 0,
+            "total_top_k": 0,
+            "latency_by_task_ms": [],
+            "latency_all_active_ms": [],
+            "latency_top_k_ms": [],
+        }
 
     def record(
         self,
@@ -84,6 +95,8 @@ class EpisodicMemory:
 
     def retrieve_by_task(self, task_id: str) -> List[MemoryEntry]:
         """Retrieve all episodic memories for a specific task."""
+        start_time = time.perf_counter()
+        
         entries = self._store.load_by_task(task_id)
         
         # Update access tracking for retrieved entries
@@ -92,14 +105,28 @@ class EpisodicMemory:
                 entry.update_access()
                 self._store.save(entry)
         
+        # Track statistics
+        latency_ms = (time.perf_counter() - start_time) * 1000.0
+        self._stats["total_by_task"] += 1
+        self._stats["latency_by_task_ms"].append(latency_ms)
+        
         return entries
 
     def retrieve_all_active(self) -> List[MemoryEntry]:
         """Retrieve all non-archived episodic memories."""
-        return [
+        start_time = time.perf_counter()
+        
+        result = [
             entry for entry in self._store.load_active()
             if entry.memory_type == MemoryType.EPISODIC
         ]
+        
+        # Track statistics
+        latency_ms = (time.perf_counter() - start_time) * 1000.0
+        self._stats["total_all_active"] += 1
+        self._stats["latency_all_active_ms"].append(latency_ms)
+        
+        return result
 
     def retrieve_top_k(self, scorer: QualityScorer, k: int = 10) -> List[MemoryEntry]:
         """
@@ -115,13 +142,24 @@ class EpisodicMemory:
         Returns:
             Top-K entries sorted by quality score (descending)
         """
-        all_entries = self.retrieve_all_active()
+        start_time = time.perf_counter()
         
-        # Score all entries
-        scored = [(entry, scorer.score(entry)) for entry in all_entries]
+        # Use score_batch for efficiency (single datetime.now() call)
+        all_entries = [
+            entry for entry in self._store.load_active()
+            if entry.memory_type == MemoryType.EPISODIC
+        ]
+        
+        # Batch score all entries
+        scored = scorer.score_batch(all_entries)
         
         # Sort by score descending and take top-K
         scored.sort(key=lambda x: x[1], reverse=True)
+        
+        # Track statistics
+        latency_ms = (time.perf_counter() - start_time) * 1000.0
+        self._stats["total_top_k"] += 1
+        self._stats["latency_top_k_ms"].append(latency_ms)
         
         return [entry for entry, _score in scored[:k]]
 
@@ -132,4 +170,18 @@ class EpisodicMemory:
     def get_filtered_count(self) -> int:
         """Return number of entries filtered by write gating."""
         return self._filtered_count
+
+    def get_statistics(self) -> Dict[str, float]:
+        """Get retrieval statistics."""
+        def avg(values: List[float]) -> float:
+            return sum(values) / len(values) if values else 0.0
+        
+        return {
+            "total_by_task_calls": self._stats["total_by_task"],
+            "total_all_active_calls": self._stats["total_all_active"],
+            "total_top_k_calls": self._stats["total_top_k"],
+            "avg_latency_by_task_ms": avg(self._stats["latency_by_task_ms"]),
+            "avg_latency_all_active_ms": avg(self._stats["latency_all_active_ms"]),
+            "avg_latency_top_k_ms": avg(self._stats["latency_top_k_ms"]),
+        }
 

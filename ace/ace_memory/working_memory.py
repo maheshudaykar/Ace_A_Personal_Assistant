@@ -6,7 +6,7 @@ import threading
 from collections import deque
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import List, Union
+from typing import Dict, List, Union
 
 from ace.ace_memory.memory_schema import MemoryEntry, MemoryType
 
@@ -30,6 +30,10 @@ class WorkingMemory:
             raise ValueError("max_capacity must be positive")
         self._buffer: deque[Union[MemoryEntry, WorkingEntry]] = deque(maxlen=max_capacity)
         self._lock = threading.Lock()
+        self._max_capacity = max_capacity
+        # Metrics tracking (no behavioral changes)
+        self._total_additions = 0
+        self._total_evictions = 0
 
     def add(self, entry: MemoryEntry) -> None:
         """Add entry to working memory (oldest evicted if at capacity)."""
@@ -37,7 +41,12 @@ class WorkingMemory:
             entry.memory_type = MemoryType.WORKING
         
         with self._lock:
+            # Track eviction if at capacity
+            if len(self._buffer) == self._max_capacity:
+                self._total_evictions += 1
+            
             self._buffer.append(entry)
+            self._total_additions += 1
 
     def add_raw(self, task_id: str, content: str, importance_score: float = 0.4) -> None:
         """Add a lightweight working-memory entry."""
@@ -48,7 +57,12 @@ class WorkingMemory:
             timestamp=datetime.now(timezone.utc),
         )
         with self._lock:
+            # Track eviction if at capacity
+            if len(self._buffer) == self._max_capacity:
+                self._total_evictions += 1
+            
             self._buffer.append(entry)
+            self._total_additions += 1
 
     def get_all(self) -> List[Union[MemoryEntry, WorkingEntry]]:
         """Retrieve all current working memory entries."""
@@ -64,3 +78,13 @@ class WorkingMemory:
         """Return current buffer size."""
         with self._lock:
             return len(self._buffer)
+
+    def get_metrics(self) -> Dict[str, int]:
+        """Get working memory metrics."""
+        with self._lock:
+            return {
+                "total_additions": self._total_additions,
+                "total_evictions": self._total_evictions,
+                "current_size": len(self._buffer),
+                "max_capacity": self._max_capacity,
+            }

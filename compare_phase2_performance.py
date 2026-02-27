@@ -28,7 +28,13 @@ from ace.ace_tools.terminal_executor import TerminalExecutor
 
 
 def capture_phase2_metrics() -> dict[str, Any]:
-    """Run Phase 2 performance capture with memory enabled."""
+    """
+    Run Phase 2 performance capture with memory enabled.
+    
+    REAL-WORLD COMPARISON:
+    - Each task performs: 3 working memory ops + 1 episodic write + 1 executor task
+    - Shows actual system performance with Phase 2 features active
+    """
     tmp_path = Path("./data/phase2_test")
     tmp_path.mkdir(parents=True, exist_ok=True)
 
@@ -177,7 +183,13 @@ def capture_phase2_metrics() -> dict[str, Any]:
 
 
 def capture_phase1_like_metrics() -> dict[str, Any]:
-    """Run a Phase 1-like capture without memory operations in this session."""
+    """
+    Run a Phase 1-like capture without memory operations in this session.
+    
+    BASELINE REFERENCE:
+    - Each task performs: 1 executor task only (no memory operations)
+    - Control group for comparison
+    """
     tmp_path = Path("./data/phase1_like_test")
     tmp_path.mkdir(parents=True, exist_ok=True)
 
@@ -301,8 +313,12 @@ def compare_with_baseline(baseline_file: str) -> None:
     memory_regression_pct = ((phase2_memory - baseline_memory) / baseline_memory) * 100
 
     print("\n" + "=" * 60)
-    print("PHASE 2 PERFORMANCE COMPARISON")
+    print("PHASE 2 REAL-WORLD PERFORMANCE COMPARISON")
     print("=" * 60)
+    print()
+    print("📌 MEASUREMENT APPROACH:")
+    print("  Phase 1: Executor-only tasks (baseline)")
+    print("  Phase 2: Executor + Memory ops (4 extra ops/task)")
 
     print("\nTask Latency:")
     print(f"  Phase 1 baseline: {baseline_latency:.2f}ms")
@@ -328,6 +344,15 @@ def compare_with_baseline(baseline_file: str) -> None:
         print("  ⚠️  WARNING: Memory regression significant!")
     else:
         print("  ✅ PASS: Memory footprint acceptable")
+
+    print("\nPhase 2 Work Breakdown:")
+    print(f"  Working memory:   {phase2_metrics['task_metrics']['working_time_ms']:.2f}ms total")
+    print(f"  Episodic memory:  {phase2_metrics['task_metrics']['episodic_time_ms']:.2f}ms total")
+    print(f"  Executor tasks:   {phase2_metrics['task_metrics']['executor_time_ms']:.2f}ms total")
+    memory_overhead_ms = phase2_metrics['task_metrics']['working_time_ms'] + phase2_metrics['task_metrics']['episodic_time_ms']
+    executor_time_ms = phase2_metrics['task_metrics']['executor_time_ms']
+    overhead_pct = (memory_overhead_ms / executor_time_ms) * 100 if executor_time_ms > 0 else 0
+    print(f"  Memory overhead:  {overhead_pct:.2f}% of executor time")
 
     print("\nPhase 2 Memory:")
     print(f"  Episodic entries: {phase2_metrics['memory_entries']}")

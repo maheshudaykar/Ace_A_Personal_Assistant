@@ -7,7 +7,7 @@ from enum import Enum
 from typing import List, Optional
 from uuid import UUID, uuid4
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, computed_field, field_validator
 
 
 class MemoryType(str, Enum):
@@ -58,3 +58,26 @@ class MemoryEntry(BaseModel):
         """Update access tracking."""
         self.access_count += 1
         self.last_accessed = datetime.now(timezone.utc)
+
+    def __hash__(self) -> int:
+        """Enable hashing for deduplication (using entry ID)."""
+        return hash(self.id)
+
+    @computed_field  # type: ignore[misc]
+    @property
+    def age_seconds(self) -> float:
+        """Compute age of memory entry in seconds."""
+        return (datetime.now(timezone.utc) - self.timestamp).total_seconds()
+
+    @computed_field  # type: ignore[misc]
+    @property
+    def is_fresh(self) -> bool:
+        """Check if memory is fresh (less than 24 hours old)."""
+        return self.age_seconds < 86400.0
+
+    @computed_field  # type: ignore[misc]
+    @property
+    def access_rate_per_day(self) -> float:
+        """Compute access frequency per day."""
+        age_days = max(self.age_seconds / 86400.0, 0.01)  # Avoid division by zero
+        return self.access_count / age_days
