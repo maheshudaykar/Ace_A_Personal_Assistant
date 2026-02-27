@@ -1,10 +1,15 @@
-# Contributing to ACE - Phase 0
+# Contributing to ACE
 
 ## Overview
 
-ACE (Autonomous Cognitive Engine) is a multi-phase project. **Phase 0** is the MVP foundation with core infrastructure.
+**ACE (Autonomous Cognitive Engine)** is a production-grade autonomous agent framework currently at **Phase 2C** (Memory Hardening & Bounded Growth). This guide covers development practices, architecture constraints, and contribution workflows for the ACE project.
 
-This guide is specifically for Phase 0 development and testing.
+### Current Project Status
+
+- **Phase**: 2C Complete (Memory Hardening & Bounded Growth)
+- **Tests**: 268/268 passing (100% success rate)
+- **Version**: v0.2.0-phase2c
+- **Performance**: O(1) amortized operations with quota governance
 
 ## Code Organization
 
