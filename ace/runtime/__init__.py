@@ -14,6 +14,10 @@ from ace.runtime.agent_context import (
 )
 from ace.runtime.agent_scheduler import AgentScheduler, AgentTask, DispatchResult, SchedulerStatus
 from ace.runtime.circuit_breaker import CircuitBreaker
+from ace.runtime.metrics_registry import (
+    MetricsRegistry, RingBuffer,
+    TaskRecord, CircuitTransitionRecord, QueueDepthSample,
+)
 from ace.runtime.runtime_config import (
     CIRCUIT_BREAKER_RETRY_WINDOW_MINUTES,
     CYCLE_INTERVAL_MS,
@@ -44,6 +48,11 @@ __all__ = [
     "DispatchResult",
     "SchedulerStatus",
     "CircuitBreaker",
+    "MetricsRegistry",
+    "RingBuffer",
+    "TaskRecord",
+    "CircuitTransitionRecord",
+    "QueueDepthSample",
     "CIRCUIT_CLOSED",
     "CIRCUIT_OPEN",
     "CIRCUIT_HALF_OPEN",
