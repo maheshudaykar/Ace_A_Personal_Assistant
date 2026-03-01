@@ -1,12 +1,53 @@
 """Golden trace recording for deterministic maintenance cycle replay."""
 from __future__ import annotations
 
-from dataclasses import dataclass
+import threading
+import time
+from dataclasses import dataclass, asdict
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
+from ace.runtime import runtime_config
+from ace.runtime.event_sequence import GlobalEventSequence
+
 if TYPE_CHECKING:
     from ace.ace_kernel.audit_trail import AuditTrail
+
+
+class EventType:
+    """Event types representing persistent state mutations only."""
+    RECORD_ENTRY = "record_entry"
+    ARCHIVE_ENTRY = "archive_entry"
+    ACTIVE_QUOTA_ENFORCED = "active_quota_enforced"
+    TOTAL_QUOTA_ENFORCED = "total_quota_enforced"
+    PER_TASK_QUOTA_ENFORCED = "per_task_quota_enforced"
+    CYCLE_START = "cycle_start"
+    CYCLE_END = "cycle_end"
+    CONSOLIDATION_GROUP_FORMED = "consolidation_group_formed"
+    CONSOLIDATION_GUARD_TRIGGERED = "consolidation_guard_triggered"
+    CONSOLIDATION_COMPLETE = "consolidation_complete"
+    COMPACTION_DELETED_ENTRIES = "compaction_deleted_entries"
+
+
+@dataclass
+class TraceEvent:
+    """Deterministic event record for replay validation."""
+    sequence_id: int
+    thread_id: int
+    timestamp_ns: float
+    event_type: str
+    deterministic_mode: bool
+    metadata: Dict[str, Any]
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Serialize to dict for JSON storage."""
+        return asdict(self)
+    
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]):
+        """Deserialize from dict."""
+        return cls(**data)
+
 
 @dataclass
 class ConsolidationMetrics:
@@ -15,11 +56,13 @@ class ConsolidationMetrics:
     comparisons: int
     guard_triggered: bool
 
+
 @dataclass
 class CompactionMetrics:
     removed_entries: int
     archived_ratio_before: float
     archived_ratio_after: float
+
 
 @dataclass  
 class CycleMetadata:
@@ -35,26 +78,90 @@ class CycleMetadata:
     active_count_before: int
     active_count_after: int
 
+
 class GoldenTrace:
-    def __init__(self, audit_trail: AuditTrail) -> None:
-        self._audit = audit_trail
-        self._cycle_count = 0
-
+    """Singleton trace recorder for determinism validation."""
+    
+    _instance: 'GoldenTrace | None' = None
+    _init_lock = threading.Lock()
+    
+    def __new__(cls, audit_trail=None):
+        """Enforce singleton pattern."""
+        if cls._instance is None:
+            with cls._init_lock:
+                if cls._instance is None:
+                    instance = super().__new__(cls)
+                    instance._audit = audit_trail
+                    instance._events: List[TraceEvent] = []
+                    instance._events_lock = threading.Lock()
+                    instance._cycle_count = 0
+                    cls._instance = instance
+        return cls._instance
+    
+    @classmethod
+    def get_instance(cls, audit_trail=None):
+        """Get or create singleton instance."""
+        if cls._instance is None:
+            return cls(audit_trail)
+        return cls._instance
+    
+    def log_event(
+        self,
+        event_type: str,
+        metadata: Dict[str, Any],
+        deterministic_mode: bool = True,
+    ) -> None:
+        """Log a determinism-critical event."""
+        if not runtime_config.TRACE_ENABLED:
+            return
+        
+        event = TraceEvent(
+            sequence_id=GlobalEventSequence.get_instance().next(),
+            thread_id=threading.get_ident(),
+            timestamp_ns=time.monotonic_ns(),
+            event_type=event_type,
+            deterministic_mode=deterministic_mode,
+            metadata=metadata,
+        )
+        
+        with self._events_lock:
+            self._events.append(event)
+    
     def record_cycle_start(self, cycle_id: int, deterministic_mode: bool) -> None:
-        self._audit.append({
-            "type": "maintenance.cycle.start",
-            "cycle_id": cycle_id,
-            "deterministic_mode": deterministic_mode,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        })
-
+        """Log cycle start boundary."""
+        self.log_event(
+            event_type=EventType.CYCLE_START,
+            metadata={"cycle_id": cycle_id},
+            deterministic_mode=deterministic_mode,
+        )
+    
     def record_cycle_end(self, metadata: CycleMetadata) -> None:
-        event = {
-            "type": "maintenance.cycle.end",
-            "cycle_id": metadata.cycle_id,
-        }
-        self._audit.append(event)
+        """Log cycle end boundary and summary."""
+        self.log_event(
+            event_type=EventType.CYCLE_END,
+            metadata={
+                "cycle_id": metadata.cycle_id,
+                "status": metadata.termination_reason,
+                "operations_executed": metadata.operations_executed,
+                "cpu_time_ms": metadata.duration_ms,
+                "active_count_before": metadata.active_count_before,
+                "active_count_after": metadata.active_count_after,
+            },
+            deterministic_mode=metadata.deterministic_mode,
+        )
         self._cycle_count += 1
-
+    
+    def get_all_events(self) -> List[TraceEvent]:
+        """Get all recorded events in sequence order."""
+        with self._events_lock:
+            return list(self._events)
+    
     def get_cycle_count(self) -> int:
+        """Get number of completed cycles."""
         return self._cycle_count
+    
+    def reset(self) -> None:
+        """Clear all events (testing only)."""
+        with self._events_lock:
+            self._events.clear()
+        self._cycle_count = 0

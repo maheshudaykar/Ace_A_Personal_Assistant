@@ -1,9 +1,14 @@
-﻿"""Phase 3A runtime configuration defaults."""
+"""Phase 3A runtime configuration defaults."""
 
 # Deterministic mode: when True, background thread does NOT auto-run.
 # Maintenance only executes via explicit run_single_cycle() calls.
 # Golden trace captures every cycle boundary for deterministic replay.
 DETERMINISTIC_MODE = True
+
+# Trace enabled: when True, logs all state mutations to GoldenTrace for determinism validation.
+# When False, tracing is completely disabled (zero performance overhead).
+# Production deployments should set to False; test/determinism mode sets to True.
+TRACE_ENABLED = False
 
 # Maintenance cycle interval (milliseconds).
 # In non-deterministic mode, thread wakes every N ms to check for work.
