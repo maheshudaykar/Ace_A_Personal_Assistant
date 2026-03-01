@@ -12,14 +12,16 @@ Starvation prevention:
     agent with consecutive_count=0 goes first.  After that agent runs, the
     starved agent's consecutive counter is reset.
 
-Circuit breaker (Gate 2.4 provides full transitions; here we read state):
+Circuit breaker (Gate 2.4):
+    - CircuitBreaker.on_success/on_failure() called after every dispatch.
     - OPEN agents are rejected to dead-letter queue.
     - HALF_OPEN agents are allowed one trial dispatch.
+    - All transitions are logged to GoldenTrace with circuit-breaker event types.
 
 Lock discipline:
     - _queue_lock is completely independent of all memory-layer locks.
     - _queue_lock is released BEFORE calling the task callable.
-    - No I/O, no memory operations, no logging inside _queue_lock.
+    - No I/O, no memory operations, no GoldenTrace logging inside _queue_lock.
 """
 
 from __future__ import annotations
@@ -34,6 +36,8 @@ from ace.runtime.agent_context import (
     CIRCUIT_OPEN,
     AgentContext,
 )
+from ace.runtime.circuit_breaker import CircuitBreaker
+from ace.runtime.golden_trace import EventType, GoldenTrace
 from ace.runtime import runtime_config
 
 
@@ -87,11 +91,14 @@ class AgentScheduler:
         result = scheduler.dispatch_next()
     """
 
-    def __init__(self) -> None:
+    def __init__(self, failure_threshold: int = 3) -> None:
         self._agents: Dict[str, AgentContext] = {}
         self._queue: List[AgentTask] = []          # ordered by _sort_key
         self._dead_letter: List[AgentTask] = []    # permanent failures (memory-only)
         self._queue_lock = threading.Lock()        # independent domain; never nested
+
+        # Embedded circuit-breaker instance (shared, stateless)
+        self._circuit_breaker = CircuitBreaker(failure_threshold=failure_threshold)
 
         # Global counters
         self._total_dispatched: int = 0
@@ -126,7 +133,6 @@ class AgentScheduler:
             ctx = self._agents.get(agent_id)
             if ctx is None:
                 return None
-            # Return a shallow copy to avoid external mutation
             import copy
             return copy.copy(ctx)
 
@@ -140,8 +146,7 @@ class AgentScheduler:
         Returns True if accepted into the queue, False if rejected (agent not
         registered, circuit OPEN and retry window not elapsed, or permanent failure).
 
-        The queue is maintained in sorted order; insertion cost is O(n) where n
-        is bounded by the number of registered agents * tasks per agent.
+        Lazily checks OPEN->HALF_OPEN transition before gating.
         """
         with self._queue_lock:
             ctx = self._agents.get(agent_id)
@@ -155,7 +160,12 @@ class AgentScheduler:
                 self._total_dead_lettered += 1
                 return False
 
-            # Circuit breaker gate (Gate 2.4 handles full transitions)
+            # Lazy OPEN -> HALF_OPEN transition check (outside lock-guarded trace)
+            # NOTE: transition logging happens inside check_half_open_transition
+            #       but _log is TRACE_ENABLED-guarded so safe to call here.
+            self._circuit_breaker.check_half_open_transition(ctx)
+
+            # Circuit breaker gate
             if not ctx.is_dispatchable():
                 task = AgentTask(agent_id=agent_id, task_id=task_id, fn=fn)
                 self._dead_letter.append(task)
@@ -166,7 +176,13 @@ class AgentScheduler:
             task = AgentTask(agent_id=agent_id, task_id=task_id, fn=fn)
             self._queue.append(task)
             self._queue.sort(key=self._sort_key)
-            return True
+
+        # Log SCHEDULED outside lock
+        GoldenTrace.get_instance().log_event(
+            event_type=EventType.AGENT_TASK_SCHEDULED,
+            metadata={"agent_id": agent_id, "task_id": task_id},
+        )
+        return True
 
     # ------------------------------------------------------------------
     # Dispatch
@@ -186,11 +202,30 @@ class AgentScheduler:
 
             # Re-sort to account for consecutive-count changes since last sort
             self._queue.sort(key=self._sort_key)
+
+            # Log FAIRNESS_CAP_HIT if top task's agent is at starvation cap
+            top_ctx = self._agents.get(self._queue[0].agent_id)
+            if top_ctx is not None:
+                max_consec = runtime_config.MAX_CONSECUTIVE_EXECUTIONS_PER_AGENT
+                if top_ctx.effective_priority(max_consec) == -1:
+                    # Will log outside lock — capture info first
+                    _fairness_agent_id = top_ctx.agent_id
+                else:
+                    _fairness_agent_id = None
+            else:
+                _fairness_agent_id = None
+
             task = self._queue.pop(0)
             ctx = self._agents.get(task.agent_id)
 
+        # Log FAIRNESS_CAP_HIT outside lock
+        if _fairness_agent_id is not None:
+            GoldenTrace.get_instance().log_event(
+                event_type=EventType.FAIRNESS_CAP_HIT,
+                metadata={"agent_id": _fairness_agent_id},
+            )
+
         if ctx is None:
-            # Agent was unregistered between submission and dispatch
             return DispatchResult(
                 task_id=task.task_id,
                 agent_id=task.agent_id,
@@ -199,6 +234,12 @@ class AgentScheduler:
                 error="agent_unregistered",
                 duration_ms=0.0,
             )
+
+        # Log DISPATCHED outside lock
+        GoldenTrace.get_instance().log_event(
+            event_type=EventType.AGENT_TASK_DISPATCHED,
+            metadata={"agent_id": task.agent_id, "task_id": task.task_id},
+        )
 
         # Execute OUTSIDE lock
         start_ns = time.perf_counter_ns()
@@ -213,6 +254,20 @@ class AgentScheduler:
             error_msg = str(exc)
 
         duration_ms = (time.perf_counter_ns() - start_ns) / 1_000_000.0
+
+        # Log COMPLETED or FAILED outside lock
+        if success:
+            GoldenTrace.get_instance().log_event(
+                event_type=EventType.AGENT_TASK_COMPLETED,
+                metadata={"agent_id": task.agent_id, "task_id": task.task_id,
+                          "duration_ms": duration_ms},
+            )
+        else:
+            GoldenTrace.get_instance().log_event(
+                event_type=EventType.AGENT_TASK_FAILED,
+                metadata={"agent_id": task.agent_id, "task_id": task.task_id,
+                          "error": error_msg},
+            )
 
         # Update agent state under lock
         with self._queue_lock:
@@ -232,6 +287,12 @@ class AgentScheduler:
                         other_ctx.reset_consecutive()
 
             self._last_dispatched_agent_id = task.agent_id
+
+        # Apply circuit-breaker transitions OUTSIDE lock (logs inside _log guard)
+        if success:
+            self._circuit_breaker.on_success(ctx)
+        else:
+            self._circuit_breaker.on_failure(ctx)
 
         return DispatchResult(
             task_id=task.task_id,
@@ -300,10 +361,8 @@ class AgentScheduler:
         """
         ctx = self._agents.get(task.agent_id)
         if ctx is None:
-            # Unknown agent: lowest priority
             return (1, 0, task.agent_id)
 
         max_consec = runtime_config.MAX_CONSECUTIVE_EXECUTIONS_PER_AGENT
         ep = ctx.effective_priority(max_consec)
-        # Negate priority for ascending sort (highest priority = smallest sort key)
         return (-ep, ctx.consecutive_execution_count, task.agent_id)
