@@ -1,4 +1,4 @@
-"""Episodic memory - task-level persistent storage with hierarchical indexing."""
+﻿"""Episodic memory - task-level persistent storage with hierarchical indexing."""
 
 from __future__ import annotations
 
@@ -14,6 +14,8 @@ from ace.ace_memory import memory_config
 from ace.ace_memory.memory_schema import MemoryEntry, MemoryType
 from ace.ace_memory.memory_store import MemoryStore
 from ace.ace_memory.quality_scorer import QualityScorer
+from ace.runtime.golden_trace import EventType, GoldenTrace
+from ace.runtime.rwlock import RWLock
 
 if TYPE_CHECKING:
     from ace.ace_memory.consolidation_engine import ConsolidationEngine
@@ -26,6 +28,12 @@ class EpisodicMemory:
     Indices:
     - Task index: Maps task_id -> Set[UUID] for quick per-task lookup
     - Recency tiers: Hot (<7d), Warm (7-30d), Cold (>30d) for efficient top-K search
+
+    Phase 3A Gate 2 locking discipline:
+    - _indices_rwlock (RWLock): guards _task_index and _recency_tiers ONLY.
+    - Lock is NEVER held during: I/O, quota enforcement, logging, or event-sequence calls.
+    - Completely independent domain from MemoryStore._lock and AuditTrail._lock.
+    - No read->write upgrades. No nesting.
     """
 
     def __init__(
@@ -57,6 +65,11 @@ class EpisodicMemory:
             "warm": set(),   # 7-30 days
             "cold": set(),   # > 30 days
         }
+        # Phase 3A Gate 2: RWLock for index isolation.
+        # Scope: _task_index + _recency_tiers mutations ONLY.
+        # Never held during: I/O, logging, quota enforcement, event-sequence calls.
+        # Completely independent domain — never nested with MemoryStore._lock or AuditTrail._lock.
+        self._indices_rwlock = RWLock()
 
         # Phase 2C incremental counters (performance optimization)
         self._total_count = 0
@@ -89,6 +102,10 @@ class EpisodicMemory:
 
         Only persists entries above the importance threshold (FluxMem pattern).
         Updates hierarchical indices on success.
+
+        Phase 3A Gate 2: index mutations are protected by _indices_rwlock (write-lock).
+        Lock is acquired AFTER I/O completes and released BEFORE quota enforcement
+        and BEFORE Gate 1.5 trace logging.
         """
         # Write gating: only persist high-importance entries
         if importance_score < self._write_threshold:
@@ -117,22 +134,36 @@ class EpisodicMemory:
                 archived=False,
             )
 
+        # I/O outside lock (MemoryStore manages its own Level-2 lock).
         self._store.save(entry)
 
-        # Update indices
-        self._update_task_index(entry.task_id, entry.id, add=True)
-        self._update_recency_tier(entry)
+        # Phase 3A Gate 2: write-lock covers ONLY in-memory index + counter mutations.
+        # Released BEFORE quota enforcement (which may call archive_entries -> write-lock again).
+        # Released BEFORE logging (independent lock domain).
+        with self._indices_rwlock.write_locked():
+            self._update_task_index(entry.task_id, entry.id, add=True)
+            self._update_recency_tier(entry)
+            # Phase 2C incremental counter updates — inside lock to stay consistent with index.
+            self._total_count += 1
+            self._active_count += 1
+            self._task_counts[entry.task_id] = self._task_counts.get(entry.task_id, 0) + 1
 
-        # Phase 2C incremental counter updates
-        self._total_count += 1
-        self._active_count += 1
-        self._task_counts[entry.task_id] = self._task_counts.get(entry.task_id, 0) + 1
-
-        # Phase 2C hardening (threshold-triggered enforcement for O(1) amortized)
+        # Phase 2C hardening — OUTSIDE lock (quota enforcement may call archive_entries
+        # which needs write-lock; holding write-lock here would deadlock).
         self._enforce_per_task_cap_if_needed(entry.task_id)
         self._enforce_total_quota_if_needed()
         self._enforce_active_quota_if_needed()
         self._track_growth_spike()
+
+        # Gate 1.5: log state mutation OUTSIDE lock and OUTSIDE I/O.
+        GoldenTrace.get_instance().log_event(
+            EventType.RECORD_ENTRY,
+            {
+                "entry_id": str(entry.id),
+                "task_id": entry.task_id,
+                "importance_score": entry.importance_score,
+            },
+        )
 
         return entry
 
@@ -181,19 +212,27 @@ class EpisodicMemory:
         3. If still insufficient, include cold tier (> 30 days)
         4. Score and rank within selected entries
         5. Return top-K with deterministic tie-breaking by UUID
+
+        PHASE 3A Gate 2: Read-lock acquires tier-ID snapshots, released before all I/O.
         """
         start_time = time.perf_counter()
 
-        # Start with hot tier entries
-        candidates = self._get_entries_by_tier("hot")
+        # Phase 3A Gate 2: read-lock to snapshot tier IDs (no I/O while locked).
+        with self._indices_rwlock.read_locked():
+            hot_ids = frozenset(self._recency_tiers["hot"])
+            warm_ids = frozenset(self._recency_tiers["warm"])
+            cold_ids = frozenset(self._recency_tiers["cold"])
+
+        # I/O and scoring OUTSIDE lock using the snapshotted ID sets.
+        candidates = self._get_entries_by_tier("hot", hot_ids)
 
         # If insufficient, add warm tier
         if len(candidates) < k:
-            candidates.extend(self._get_entries_by_tier("warm"))
+            candidates.extend(self._get_entries_by_tier("warm", warm_ids))
 
         # If still insufficient, add cold tier
         if len(candidates) < k:
-            candidates.extend(self._get_entries_by_tier("cold"))
+            candidates.extend(self._get_entries_by_tier("cold", cold_ids))
 
         # Batch score with deterministic ordering
         scored = scorer.score_batch(candidates)
@@ -209,37 +248,54 @@ class EpisodicMemory:
         return [entry for entry, _score in scored[:k]]
 
     def archive_entries(self, entry_ids: List[UUID]) -> int:
-        """Archive episodic entries and update indices."""
+        """Archive episodic entries and update indices.
+
+        Phase 3A Gate 2: index mutations are protected by _indices_rwlock (write-lock).
+        Lock is acquired AFTER all I/O completes and released BEFORE compaction flag
+        and BEFORE Gate 1.5 trace logging.
+        """
+        # I/O outside lock (MemoryStore manages its own Level-2 lock).
         all_entries = self._store.load_all()
         entry_task_map = {entry.id: (entry.task_id, entry.archived) for entry in all_entries}
 
         count = self._store.prune(entry_ids)
 
-        # Update indices and counters
-        for entry_id in entry_ids:
-            # Remove from all recency tiers
-            for tier_set in self._recency_tiers.values():
-                tier_set.discard(entry_id)
+        # Phase 3A Gate 2: write-lock for index + counter mutations ONLY.
+        # Released BEFORE compaction check and BEFORE logging.
+        with self._indices_rwlock.write_locked():
+            for entry_id in entry_ids:
+                # Remove from all recency tiers
+                for tier_set in self._recency_tiers.values():
+                    tier_set.discard(entry_id)
 
-            task_info = entry_task_map.get(entry_id)
-            if task_info is not None:
-                task_id, was_archived = task_info
-                self._update_task_index(task_id, entry_id, add=False)
-                if task_id in self._task_index and not self._task_index[task_id]:
-                    del self._task_index[task_id]
+                task_info = entry_task_map.get(entry_id)
+                if task_info is not None:
+                    task_id, was_archived = task_info
+                    self._update_task_index(task_id, entry_id, add=False)
+                    if task_id in self._task_index and not self._task_index[task_id]:
+                        del self._task_index[task_id]
 
-                # Update counters only for newly archived entries
-                if not was_archived:
-                    self._active_count -= 1
-                    self._archived_count += 1
-                    if task_id in self._task_counts:
-                        self._task_counts[task_id] -= 1
-                        if self._task_counts[task_id] == 0:
-                            del self._task_counts[task_id]
+                    # Update counters only for newly archived entries
+                    if not was_archived:
+                        self._active_count -= 1
+                        self._archived_count += 1
+                        if task_id in self._task_counts:
+                            self._task_counts[task_id] -= 1
+                            if self._task_counts[task_id] == 0:
+                                del self._task_counts[task_id]
 
-        # Check if compaction needed after archiving
+        # Compaction flag and Gate 1.5 logging OUTSIDE lock.
         if self._archived_count > 0 and (self._archived_count / max(self._total_count, 1)) > 0.30:
             self._compaction_pending = True
+
+        # Gate 1.5: log archive event OUTSIDE lock
+        GoldenTrace.get_instance().log_event(
+            EventType.ARCHIVE_ENTRY,
+            {
+                "entry_ids": sorted([str(eid) for eid in entry_ids]),
+                "count": count,
+            },
+        )
 
         return count
 
@@ -425,7 +481,10 @@ class EpisodicMemory:
     # ========== PHASE 2B: Hierarchical Indexing Support ==========
 
     def _update_task_index(self, task_id: str, entry_id: UUID, add: bool = True) -> None:
-        """Update task-level index."""
+        """Update task-level index.
+
+        Must be called from within a _indices_rwlock.write_locked() context.
+        """
         if add:
             if task_id not in self._task_index:
                 self._task_index[task_id] = set()
@@ -435,7 +494,10 @@ class EpisodicMemory:
                 self._task_index[task_id].discard(entry_id)
 
     def _update_recency_tier(self, entry: MemoryEntry) -> None:
-        """Update recency tier based on entry age."""
+        """Update recency tier based on entry age.
+
+        Must be called from within a _indices_rwlock.write_locked() context.
+        """
         age = (datetime.now(timezone.utc) - entry.timestamp).days
 
         # Remove from all tiers first
@@ -450,12 +512,27 @@ class EpisodicMemory:
         else:
             self._recency_tiers["cold"].add(entry.id)
 
-    def _get_entries_by_tier(self, tier: str) -> List[MemoryEntry]:
-        """Get all non-archived entries from a specific recency tier."""
-        if tier not in self._recency_tiers:
+    def _get_entries_by_tier(
+        self,
+        tier: str,
+        tier_ids: frozenset | None = None,
+    ) -> List[MemoryEntry]:
+        """Get all non-archived entries from a specific recency tier.
+
+        Args:
+            tier: Tier name ("hot", "warm", "cold").
+            tier_ids: Pre-snapshotted frozenset of IDs (caller already released read-lock).
+                      When None, reads _recency_tiers directly — only safe in
+                      single-threaded contexts.
+        """
+        if tier_ids is None:
+            if tier not in self._recency_tiers:
+                return []
+            tier_ids = frozenset(self._recency_tiers[tier])
+
+        if not tier_ids:
             return []
 
-        tier_ids = self._recency_tiers[tier]
         all_entries = self._store.load_active()
 
         # Filter to tier IDs, exclude archived
@@ -466,10 +543,11 @@ class EpisodicMemory:
 
     def get_index_stats(self) -> Dict[str, Any]:
         """Get hierarchical index statistics for debugging."""
-        return {
-            "task_index_size": len(self._task_index),
-            "hot_tier_count": len(self._recency_tiers["hot"]),
-            "warm_tier_count": len(self._recency_tiers["warm"]),
-            "cold_tier_count": len(self._recency_tiers["cold"]),
-            "total_indexed": sum(len(tier) for tier in self._recency_tiers.values()),
-        }
+        with self._indices_rwlock.read_locked():
+            return {
+                "task_index_size": len(self._task_index),
+                "hot_tier_count": len(self._recency_tiers["hot"]),
+                "warm_tier_count": len(self._recency_tiers["warm"]),
+                "cold_tier_count": len(self._recency_tiers["cold"]),
+                "total_indexed": sum(len(tier) for tier in self._recency_tiers.values()),
+            }
