@@ -101,7 +101,7 @@ class CircuitBreaker:
         elapsed = time.monotonic() - ctx.last_failure_time
         if elapsed >= ctx.retry_window_seconds:
             ctx.circuit_state = CIRCUIT_HALF_OPEN
-            self._log(EventType.CIRCUIT_BREAKER_HALF_OPEN, ctx)
+            # Logging removed — caller (scheduler) logs outside _queue_lock
             return True
 
         return False

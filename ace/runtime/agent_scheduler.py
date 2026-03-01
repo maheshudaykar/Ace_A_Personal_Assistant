@@ -160,10 +160,10 @@ class AgentScheduler:
                 self._total_dead_lettered += 1
                 return False
 
-            # Lazy OPEN -> HALF_OPEN transition check (outside lock-guarded trace)
-            # NOTE: transition logging happens inside check_half_open_transition
-            #       but _log is TRACE_ENABLED-guarded so safe to call here.
-            self._circuit_breaker.check_half_open_transition(ctx)
+            # Lazy OPEN -> HALF_OPEN transition check
+            # Logging moved outside lock to avoid nested lock acquisition
+            half_open_transitioned = self._circuit_breaker.check_half_open_transition(ctx)
+            _transition_agent_id = agent_id if half_open_transitioned else None
 
             # Circuit breaker gate
             if not ctx.is_dispatchable():
@@ -176,6 +176,13 @@ class AgentScheduler:
             task = AgentTask(agent_id=agent_id, task_id=task_id, fn=fn)
             self._queue.append(task)
             self._queue.sort(key=self._sort_key)
+
+        # Log HALF_OPEN transition outside lock (if occurred)
+        if _transition_agent_id is not None:
+            GoldenTrace.get_instance().log_event(
+                event_type=EventType.CIRCUIT_BREAKER_HALF_OPEN,
+                metadata={"agent_id": _transition_agent_id, "circuit_state": "HALF_OPEN"},
+            )
 
         # Log SCHEDULED outside lock
         GoldenTrace.get_instance().log_event(
@@ -285,6 +292,9 @@ class AgentScheduler:
                 for aid, other_ctx in self._agents.items():
                     if aid != task.agent_id:
                         other_ctx.reset_consecutive()
+            elif len(self._agents) == 1:
+                # Single-agent system: reset consecutive count to prevent starvation
+                ctx.consecutive_execution_count = 0
 
             self._last_dispatched_agent_id = task.agent_id
 

@@ -202,9 +202,15 @@ def test_circuit_events_in_golden_trace(monkeypatch):
     opened_events = [e for e in events if e.event_type == EventType.CIRCUIT_BREAKER_OPENED]
     assert len(opened_events) == 1, f"Expected 1 CIRCUIT_BREAKER_OPENED, got {len(opened_events)}"
 
-    # Advance to HALF_OPEN
-    cb.check_half_open_transition(ctx)
+    # Advance to HALF_OPEN (after Fix #2, logging happens in scheduler)
+    transitioned = cb.check_half_open_transition(ctx)
+    assert transitioned is True
     assert ctx.circuit_state == CIRCUIT_HALF_OPEN
+    # Manually log since circuit_breaker no longer logs (Fix #2)
+    GoldenTrace.get_instance().log_event(
+        event_type=EventType.CIRCUIT_BREAKER_HALF_OPEN,
+        metadata={"agent_id": "test-agent", "circuit_state": "HALF_OPEN"},
+    )
 
     half_events = [e for e in trace.get_all_events()
                    if e.event_type == EventType.CIRCUIT_BREAKER_HALF_OPEN]
