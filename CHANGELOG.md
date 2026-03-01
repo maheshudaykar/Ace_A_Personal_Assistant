@@ -1,100 +1,132 @@
-# Changelog
+﻿# Changelog
 
-All notable changes to ACE will be documented in this file.
+All notable changes to ACE are documented in this file.
 
-## [0.1.0] - 2026-02-26 Phase 0 MVP Release
+This project follows a phased release model focused on deterministic behavior, governance safety, and production stability.
+
+## [Unreleased]
+
+### Phase 3 Readiness Status (as of 2026-03-01)
+
+#### Validation Gates
+- ✅ Full regression suite: 268/268 passing
+- ✅ Determinism preserved across Phase 0-2C workflows
+- ✅ Memory governance active (total/active/per-task quotas + consolidation guard + compaction)
+- ✅ No kernel modifications required for current hardening scope
+
+#### Current Performance Snapshot
+- 1,000-entry benchmark:
+  - Record: 39.69 ms
+  - Consolidate: 95.93 ms
+  - Retrieve avg: 2.82 ms
+  - Memory increase: 6.18 MB (~6.32 KB/entry)
+- 5,000-entry benchmark:
+  - Record: 200.48 ms
+  - Consolidate: 395.67 ms
+  - Retrieve avg: 13.28 ms
+  - Memory increase: 17.07 MB (~3.50 KB/entry)
+
+#### Pre-Phase 3 Checklist
+- ✅ Phase 2C governance complete and stable
+- ✅ Stress validation (1k + 5k) completed
+- ✅ Test suite green on current main
+- ⚠️ Working tree must be clean before Phase 3 branching/release cut
+
+---
+
+## [v0.2.0-phase2c] - 2026-02-28
 
 ### Added
-- **Core Infrastructure**
-  - Logging system with RotatingFileHandler (10MB, 5 backups)
-  - 4-state state machine (BOOT→IDLE→EXECUTING→SHUTDOWN)
-  - Simple pub/sub event bus with event history
-  - Deterministic mode for reproducible execution
-  
-- **Tool System**
-  - Tool registry with singleton pattern
-  - Read/write/list file operations
-  - Mock LLM interface (context-aware responses)
-  - Tool execution framework
+- Phase 2C memory governance configuration in `ace/ace_memory/memory_config.py`
+- Hard caps:
+  - `MAX_TOTAL_ENTRIES = 10_000`
+  - `MAX_ACTIVE_ENTRIES = 5_000`
+  - `MAX_ENTRIES_PER_TASK = 1_000`
+  - `MAX_COMPARISONS_PER_PASS = 50_000`
+- Growth observability threshold (`GROWTH_SPIKE_ENTRIES_PER_MINUTE`)
 
-- **User Interface**
-  - Interactive CLI with 8 commands
-  - Real-time state display
-  - Graceful shutdown support
-  
-- **Testing & Config**
-  - 62 comprehensive unit tests
-  - pytest configuration with conftest.py
-  - Complete config.yaml with all settings
-  - Test coverage for all core modules
+### Changed
+- `EpisodicMemory.record()` hardened with deterministic enforcement order:
+  1) per-task cap,
+  2) total quota,
+  3) active quota,
+  4) growth monitoring
+- Incremental state accounting added for performance stabilization:
+  - `_total_count`, `_active_count`, `_archived_count`, `_task_counts`
+  - threshold-crossing enforcement instead of continuous re-enforcement
+- Consolidation complexity guard added to cap comparisons per pass
+- Deterministic compaction retained with atomic rewrite semantics
 
-- **Documentation**
-  - PHASE_0_README.md with setup/usage
-  - PHASE_0_COMPLETION.md validation checklist
-  - Inline code documentation
-  - Architecture overview
+### Fixed
+- Record-path performance regression from repeated full-store scans
+- Excessive trigger frequency for governance checks under high write load
 
-### Features
-- ✅ Logging to file + console with automatic rotation
-- ✅ State machine with transition validation and callbacks
-- ✅ Event bus with filtering and history (max 1000 events)
-- ✅ Tool registry for managing tool execution
-- ✅ Mock LLM for testing before Phase 1 integration
-- ✅ CLI with 7 functional commands + help
-- ✅ Deterministic mode toggle for reproducibility
-- ✅ Pure Python stdlib (no external runtime dependencies)
-
-### Test Coverage
-- test_state_machine.py - 15 tests
-- test_event_bus.py - 18 tests
-- test_tool_registry.py - 14 tests
-- test_deterministic_mode.py - 15 tests
-- **Total**: 62 tests covering all core functionality
-
-### Known Limitations
-- Synchronous only (async support in Phase 1)
-- Mock LLM only (real inference in Phase 1)
-- Single process (distributed support later)
-- Limited tools (50+ in Phase 1)
-- No persistence (saved between sessions)
+### Tests
+- New governance test module: `tests/test_phase2c_governance.py` (9 tests)
+- Full suite status at release: 268/268 passing
 
 ---
 
-## [Unreleased] - Phase 1 Planning
+## [v0.2.0-phase2b] - 2026-02-27
 
-### Planned for Phase 1
-- Real LLM integration (llama.cpp)
-- Planner & Reasoner for task decomposition
-- Reflection engine for self-critique
-- Async event bus with priority queue
-- 50+ tools (Git, Docker, OS control)
-- Episodic and semantic memory systems
-- Risk assessment module
-- Extended state machine (10 states)
-- Model routing and token budgeting
+### Added
+- Deterministic similarity consolidation (no clustering libraries)
+- Hierarchical retrieval indexing (task index + hot/warm/cold tiers)
 
-See ACE_MASTER_TASK_ROADMAP.md for complete Phase 1-6 planning.
+### Guarantees
+- Synchronous execution only
+- Stable deterministic ordering for merge/retrieval paths
+
+### Validation
+- 259/259 tests passing at Phase 2B completion
 
 ---
 
-## Installation
+## [v0.2.0-phase2a] - 2026-02-27
 
-```bash
-cd c:\Mahi\Jarvis\Ace_A_Personal_Assistant
-pip install -r requirements.txt  # Optional (dev tools)
-python run_ace.py
-```
+### Added
+- Memory micro-optimizations and observability improvements:
+  - computed schema fields
+  - recency caching
+  - selective cache invalidation
+  - retrieval statistics
 
-## Testing
-
-```bash
-pytest tests/ -v
-```
-
-## License
-
-See LICENSE file.
+### Validation
+- 30/30 Phase 2A tests passing
+- No regressions in existing suite
 
 ---
 
-For more details, see PHASE_0_COMPLETION.md
+## [v0.2.0-phase2] - 2026-02-27
+
+### Added
+- Core memory architecture foundations (working, episodic, scoring, consolidation/pruning scaffolding)
+
+### Notes
+- Established Phase 2 baseline for later 2A/2B/2C hardening and scaling work
+
+---
+
+## [ace_phase1_stable] - 2026-02-26
+
+### Added
+- Phase 1 kernel and governance foundation finalized
+- Safety-critical infrastructure stabilized and tagged as Phase 1 stable
+
+---
+
+## [Phase 0] - 2026-02-26
+
+### Added
+- Initial MVP core:
+  - deterministic mode
+  - state machine + event bus
+  - tool registry + CLI shell
+  - baseline tests and docs
+
+---
+
+## Notes
+
+- Phase tags in git are authoritative release anchors.
+- Reports under project root (`PHASE_2A_COMPLETION_REPORT.md`, `PHASE_2B_COMPLETION_REPORT.md`) contain deeper implementation and benchmark detail.
