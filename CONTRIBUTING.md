@@ -1,292 +1,154 @@
 # Contributing to ACE
 
-## Overview
+Thanks for contributing to ACE.
 
-**ACE (Autonomous Cognitive Engine)** is a production-grade autonomous agent framework currently at **Phase 2C** (Memory Hardening & Bounded Growth). This guide covers development practices, architecture constraints, and contribution workflows for the ACE project.
+This guide explains how to contribute safely to a deterministic, governance-first codebase.
 
-### Current Project Status
+## Project Philosophy
 
-- **Phase**: 2C Complete (Memory Hardening & Bounded Growth)
-- **Tests**: 268/268 passing (100% success rate)
-- **Version**: v0.2.0-phase2c
-- **Performance**: O(1) amortized operations with quota governance
+ACE prioritizes:
 
-## Code Organization
+- deterministic behavior
+- bounded resource growth
+- auditable system actions
+- clear layer boundaries
 
-### Module Structure
+When in doubt, choose the simpler, more predictable implementation.
 
+## Repository Structure
+
+```text
+ace/
+  ace_kernel/        # core governance/state/audit primitives
+  ace_core/          # event infrastructure
+  ace_tools/         # tool interfaces/executors
+  ace_memory/        # memory, consolidation, governance controls
+  ace_diagnostics/   # evaluation, profiling, benchmarking helpers
+  ace_cognitive/     # cognitive modules
+  runtime/           # runtime orchestration helpers
+
+tests/               # full regression and phase tests
+run_ace.py           # entrypoint
+README.md            # project overview
+CHANGELOG.md         # release and phase history
 ```
-ace_core/          # Event bus infrastructure (Layer - Core)
-ace_kernel/        # State machine, logging, deterministic mode (Layer 0)
-ace_tools/         # Tool registry, file ops, LLM interface (Layer 2)
-ace_interface/     # CLI and user-facing interfaces (Layer 4)
-ace_cognitive/     # Planner, reasoner (Layer 1 - placeholder)
-ace_memory/        # Memory systems (Phase 2+ - placeholder)
-ace_evolution/     # Self-improvement (Phase 3+ - placeholder)
-```
 
-### Layer Responsibilities
+## Ground Rules
 
-- **Layer 0 (Kernel)**: Immutable core (logging, state machine, deterministic mode)
-- **Core**: Event infrastructure (pub/sub, history)
-- **Layer 2 (Tools)**: Tool execution, LLM interface
-- **Layer 4 (Interface)**: User interaction (CLI)
+- Do not modify kernel behavior casually; treat `ace_kernel/` as stability-critical.
+- Preserve determinism (stable sorting, reproducible behavior, no hidden randomness).
+- Avoid introducing async/threads for memory governance paths unless explicitly required.
+- Keep changes focused; avoid drive-by refactors unrelated to the issue.
+- Do not weaken quotas/guards without explicit design approval.
 
-## Development Guidelines
-
-### 1. Code Style
+## Development Setup
 
 ```bash
-# Format with black
-black ace_* run_ace.py
-
-# Lint with flake8
-flake8 ace_* run_ace.py
-
-# Type check with mypy
-mypy ace_* run_ace.py
+python -m venv .venv
 ```
 
-### 2. Testing
+**Windows (PowerShell)**
+```powershell
+.venv\Scripts\Activate.ps1
+python -m pip install -U pip
+python -m pip install -r requirements.txt
+```
 
-Every module should have corresponding tests:
-- `ace_kernel/state_machine.py` → `tests/test_state_machine.py`
-- New module → New test file in `tests/`
+**Linux/macOS**
+```bash
+source .venv/bin/activate
+python -m pip install -U pip
+python -m pip install -r requirements.txt
+```
+
+## Branch and Commit Workflow
+
+1. Create a focused branch from `main`
+2. Make minimal, reviewable changes
+3. Add or update tests for behavior changes
+4. Run validation locally
+5. Open PR with clear scope and rationale
+
+Commit style recommendation:
+
+```text
+feat: short description
+fix: short description
+refactor: short description
+test: short description
+docs: short description
+```
+
+## Coding Standards
+
+- Use explicit type hints for new/changed code.
+- Prefer small, composable functions with clear responsibilities.
+- Keep public APIs backward compatible unless change is approved.
+- Add concise docstrings for non-trivial behavior.
+- Avoid one-letter variable names in production code.
+
+## Testing Requirements
+
+Before opening a PR, run:
 
 ```bash
-# Run all tests
-pytest tests/ -v
-
-# Run specific test
-pytest tests/test_state_machine.py -v
-
-# Run with coverage
-pytest tests/ --cov=ace_* -v
+python -m pytest tests/ -q
 ```
 
-### 3. Logging
+For memory/governance changes, also run target suites/benchmarks relevant to your change (for example, phase governance tests and stress benchmarks).
 
-Use logging throughout:
+### Test Expectations
 
-```python
-import logging
+- New behavior must have tests.
+- Bug fixes must include regression coverage when feasible.
+- Deterministic behavior must remain stable across repeated runs.
 
-logger = logging.getLogger(__name__)
+## Performance and Safety Expectations
 
-logger.info("Starting operation")
-logger.debug("Detailed debug info")
-logger.error("An error occurred")
-```
+For changes affecting memory or runtime governance:
 
-### 4. Docstrings
+- preserve enforcement order and guard semantics
+- avoid repeated full-store scans in hot paths
+- ensure bounded growth behavior remains intact
+- verify no index corruption or nondeterministic side effects
 
-Use Google-style docstrings:
+If performance regresses materially, report it in the PR with benchmark context.
 
-```python
-def my_function(param1: str, param2: int) -> bool:
-    """Short description.
-    
-    Longer description if needed.
-    
-    Args:
-        param1: Description of param1
-        param2: Description of param2
-        
-    Returns:
-        Description of return value
-        
-    Raises:
-        ValueError: When validation fails
-    """
-    pass
-```
+## Documentation Expectations
 
-### 5. Error Handling
+Update docs when behavior changes:
 
-Always handle errors gracefully:
+- `README.md` for user-facing architecture/usage changes
+- `CHANGELOG.md` for release-impacting changes
+- inline module docstrings where logic is non-obvious
 
-```python
-try:
-    result = risky_operation()
-except SpecificError as e:
-    logger.error(f"Operation failed: {e}")
-    raise  # Re-raise or handle appropriately
-```
+Avoid duplicating long phase history in README; keep detailed progression in CHANGELOG.
 
-## Phase 0 Scope Constraints
+## Pull Request Checklist
 
-### ✅ Allowed in Phase 0
-- Pure Python stdlib modules
-- Simple synchronous code
-- Mock implementations (for later integration)
-- File I/O with safety checks
-- Logging and state tracking
-- Unit tests with pytest
-- Configuration files (YAML)
-
-### ❌ NOT Allowed in Phase 0
-- External Python packages (except dev tools)
-- Async/await code
-- Self-modifying code
-- Self-learning implementations
-- Distributed communication
-- Really anything complex that should wait for Phase 1+
-
-## Adding a New Tool
-
-To add a new tool in Phase 0:
-
-1. **Add tool function** to a file in `ace_tools/`:
-```python
-def new_tool(param1: str) -> str:
-    """Tool description."""
-    logger.info(f"Running new_tool with {param1}")
-    # Implementation
-    return result
-```
-
-2. **Register in `run_ace.py`**:
-```python
-from ace_tools import new_tool, get_tool_registry
-registry = get_tool_registry()
-registry.register(Tool("new_tool", "Description", new_tool, {"param1": "str"}))
-```
-
-3. **Add CLI command** in `ace_interface/cli.py` if needed:
-```python
-elif command.startswith("new_cmd "):
-    param = command[8:].strip()
-    result = registry.execute_tool("new_tool", param1=param)
-    print(result)
-```
-
-4. **Write tests** in `tests/test_new_tool.py`:
-```python
-def test_new_tool():
-    result = new_tool("input")
-    assert result == "expected"
-```
-
-## Adding a New Event Type
-
-To add a new event type:
-
-1. **Add to EventType enum** in `ace_core/event_bus.py`:
-```python
-class EventType(Enum):
-    # ...existing types...
-    NEW_EVENT = "NEW_EVENT"
-```
-
-2. **Publish in code**:
-```python
-event = Event(event_type=EventType.NEW_EVENT, data={"key": "value"})
-bus.publish(event)
-```
-
-3. **Subscribe** if needed:
-```python
-def handle_event(event):
-    print(f"Got event: {event.data}")
-
-bus.subscribe(EventType.NEW_EVENT, handle_event)
-```
-
-## Testing Checklist
-
-Before committing changes:
-
-1. ✅ All tests pass: `pytest tests/ -v`
-2. ✅ Code formatted: `black ace_* run_ace.py`
-3. ✅ No lint errors: `flake8 ace_* run_ace.py`
-4. ✅ Type hints correct: `mypy ace_* run_ace.py`
-5. ✅ Logging added to key operations
-6. ✅ Docstrings complete
-7. ✅ Config updated if needed
-8. ✅ README updated if interface changes
-
-## Common Tasks
-
-### Run ACE
-```bash
-python run_ace.py
-python run_ace.py --deterministic
-```
-
-### Debug with Logging
-```bash
-# Edit config/config.yaml, set logging level to DEBUG
-# Or check logs/system.log
-tail -f logs/system.log
-```
-
-### Check Code Quality
-```bash
-# All checks
-black ace_* run_ace.py --check
-flake8 ace_* run_ace.py
-mypy ace_* run_ace.py
-pytest tests/ -v
-```
-
-### View Test Coverage
-```bash
-pytest tests/ --cov=ace_* --cov-report=html
-# Open htmlcov/index.html
-```
-
-## Phase 0 Principles
-
-1. **Simple over Complex**: Keep it basic
-2. **Stdlib Only**: No external deps at runtime
-3. **Well-Tested**: High test coverage
-4. **Well-Logged**: Audit trail of executions
-5. **Well-Documented**: Clear and complete docs
-6. **Foundation First**: Build solid foundation for Phase 1+
+- [ ] Scope is clear and limited
+- [ ] Tests added/updated
+- [ ] Full suite passes locally
+- [ ] No unrelated files changed
+- [ ] Determinism and governance constraints preserved
+- [ ] Documentation updated where needed
 
 ## Reporting Issues
 
-When reporting issues, include:
-- What you were trying to do
-- What happened
-- What you expected
-- Steps to reproduce
-- Python version and OS
-- Relevant log lines
+Please include:
 
-Example:
-```
-Title: CLI command "list" fails with unicode filenames
+- what you expected
+- what happened
+- steps to reproduce
+- environment (OS, Python version)
+- relevant logs or tracebacks
 
-Steps:
-1. Create a file with unicode name: "测试.txt"
-2. Run: python run_ace.py
-3. Type: list .
-4. Error occurs
+A minimal repro script or failing test is highly appreciated.
 
-Expected: File list includes "测试.txt"
+## Questions
 
-Actual: Error in list_files() with unicode handling
+- Start with `README.md` for architecture and runtime flow.
+- Check `CHANGELOG.md` for phase-specific release details.
+- Review existing tests for expected behavior patterns.
 
-Environment:
-- Python 3.11.0
-- Windows 10
-- Log excerpt: [error in list_files with encoding]
-```
-
-## Questions?
-
-- Check PHASE_0_README.md for usage
-- See PHASE_0_COMPLETION.md for architecture
-- Review ACE_MASTER_TASK_ROADMAP.md for Phase planning
-- Look at existing code for examples
-
-## Phase 0 Timeline
-
-- **Current**: Phase 0 MVP complete
-- **Next**: Phase 1 design review
-- **Future**: Phase 1 implementation (real LLM, planner, 50+ tools)
-
----
-
-Thank you for contributing to ACE! 🚀
+Thanks for helping improve ACE.
