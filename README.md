@@ -1,6 +1,6 @@
 <div align="center">
 
-![ACE Logo](ace-logo.png)
+<img src="ace-logo.png" alt="ACE Logo" width="220" />
 
 # ACE — Autonomous Cognitive Engine
 

@@ -6,6 +6,10 @@ This project follows a phased release model focused on deterministic behavior, g
 
 ## [Unreleased]
 
+### Documentation
+- README refreshed to focus on project purpose, architecture, runtime flow, and practical usage
+- CONTRIBUTING guide modernized with current governance constraints, workflow, and validation expectations
+
 ### Phase 3 Readiness Status (as of 2026-03-01)
 
 #### Validation Gates
