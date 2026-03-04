@@ -15,7 +15,7 @@ import threading
 import time
 import uuid
 import logging
-from typing import Dict, List, Optional, Callable, Any
+from typing import Dict, List, Optional, Callable, Any, Tuple
 from dataclasses import dataclass
 
 from .node_registry import NodeRegistry
