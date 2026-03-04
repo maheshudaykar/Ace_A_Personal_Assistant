@@ -336,12 +336,14 @@ class TestPredictorAgent:
             predictor.observe(self._seq(["x", "y", "z"]))
         preds = predictor.predict(["x"])
         if preds:
-            before = preds[0].confidence_score
-            predictor.apply_feedback(preds[0].prediction_id, positive=False)
-            predictor.apply_feedback(preds[0].prediction_id, positive=False)
-            # confidence should have changed
-            after = predictor._patterns[preds[0].pattern_id].confidence_score
-            assert after != before or True  # idempotent if no more feedback
+            pred = preds[0]
+            pattern = predictor._patterns[pred.pattern_id]
+            before = pattern.confidence_score
+            predictor.apply_feedback(pred.prediction_id, positive=False)
+            predictor.apply_feedback(pred.prediction_id, positive=False)
+            after = predictor._patterns[pred.pattern_id].confidence_score
+            # Two negative feedbacks should lower or maintain confidence (0 positive / 2 total = 0.0)
+            assert after <= before
 
     def test_action_sequence_dataclass(self):
         seq = ActionSequence(

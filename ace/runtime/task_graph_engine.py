@@ -91,8 +91,6 @@ class TaskGraphEngine:
 
     @staticmethod
     def _run_task(task: GraphTask, completed: Dict[str, GraphTask]) -> None:
-        dep_results = {dep_id: completed[dep_id].result for dep_id in task.dependencies}
-        merged_args = {**task.args, "_dep_results": dep_results}
         try:
             task.result = task.fn(**{k: v for k, v in task.args.items()})
             task.status = "done"
@@ -119,12 +117,6 @@ class TaskGraphEngine:
     def _validate_no_cycles(task_map: Dict[str, GraphTask]) -> None:
         """Kahn's algorithm for cycle detection."""
         in_degree: Dict[str, int] = {tid: 0 for tid in task_map}
-        for task in task_map.values():
-            for dep in task.dependencies:
-                in_degree[task.task_id] = in_degree.get(task.task_id, 0) + 1
-
-        # recompute properly
-        in_degree = {tid: 0 for tid in task_map}
         for task in task_map.values():
             for dep in task.dependencies:
                 if dep in in_degree:
