@@ -5,7 +5,7 @@ import logging
 import time
 import uuid
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from ace.runtime.agent_bus import AgentBus, AgentMessage
 from ace.runtime.golden_trace import GoldenTrace
@@ -99,7 +99,7 @@ class ValidatorAgent:
     # Risk computation
     # ------------------------------------------------------------------
 
-    def _compute_risk(self, actions: List[str]) -> tuple[float, List[str]]:
+    def _compute_risk(self, actions: List[str]) -> Tuple[float, List[str]]:
         violations: List[str] = []
         risk = 0.0
 

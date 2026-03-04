@@ -7,7 +7,7 @@ import os
 import time
 import uuid
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from ace.runtime.agent_bus import AgentBus, AgentMessage
 from ace.runtime.golden_trace import GoldenTrace
@@ -190,8 +190,8 @@ class TransformerAgent:
         for src, dst in edges:
             adj.setdefault(src, []).append(dst)
 
-        visited: set[str] = set()
-        rec_stack: set[str] = set()
+        visited: Set[str] = set()
+        rec_stack: Set[str] = set()
         cycles: List[List[str]] = []
 
         def dfs(node: str, path: List[str]) -> None:

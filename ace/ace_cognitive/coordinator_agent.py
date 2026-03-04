@@ -16,8 +16,6 @@ __all__ = ["WorkflowStep", "WorkflowPlan", "CoordinatorAgent"]
 
 logger = logging.getLogger(__name__)
 
-random.seed(42)
-
 
 @dataclass
 class WorkflowStep:
@@ -65,7 +63,7 @@ class CoordinatorAgent:
         audit_trail=None,
         seed: int = 42,
     ) -> None:
-        random.seed(seed)
+        self._random = random.Random(seed)
         self._bus = bus
         self._audit = audit_trail
         self._trace = GoldenTrace.get_instance()

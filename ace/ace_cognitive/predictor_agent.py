@@ -77,7 +77,7 @@ class PredictorAgent:
         audit_trail=None,
         seed: int = _SEED,
     ) -> None:
-        random.seed(seed)
+        self._random = random.Random(seed)
         self._bus = bus
         self._audit = audit_trail
         self._trace = GoldenTrace.get_instance()

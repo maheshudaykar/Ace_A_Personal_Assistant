@@ -5,7 +5,7 @@ import logging
 import time
 import uuid
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from ace.runtime.agent_bus import AgentBus, AgentMessage
 from ace.runtime.golden_trace import GoldenTrace
@@ -155,7 +155,7 @@ class ExecutorAgent:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _simulate_action(action: str, context: Dict[str, Any]) -> tuple[str, List[str]]:
+    def _simulate_action(action: str, context: Dict[str, Any]) -> Tuple[str, List[str]]:
         """
         Safely simulate a single action string.
 

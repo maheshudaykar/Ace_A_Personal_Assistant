@@ -54,27 +54,35 @@ class TaskGraphEngine:
         self._validate_no_cycles(task_map)
 
         with ThreadPoolExecutor(max_workers=self._max_workers) as pool:
+            running_ids: set = set()
             while len(completed) < len(task_map):
-                ready = self._get_ready_tasks(task_map, completed)
+                ready = self._get_ready_tasks(task_map, completed, running_ids)
                 if not ready:
                     # Check for stuck tasks (all pending but none ready = cycle guard)
-                    pending = [t for t in task_map.values() if t.task_id not in completed]
-                    if pending:
+                    pending = [t for t in task_map.values() if t.task_id not in completed and t.task_id not in running_ids]
+                    if pending and not running_ids:
                         logger.error("TaskGraphEngine: deadlock detected; aborting remaining tasks")
                         for t in pending:
                             t.status = "failed"
                             t.error = "deadlock"
                             completed[t.task_id] = t
-                    break
+                        break
+                    elif not running_ids:
+                        break
+                    else:
+                        # Wait for running tasks to finish
+                        break
 
                 futures = {}
                 for task in ready:
                     task.status = "running"
+                    running_ids.add(task.task_id)
                     fut = pool.submit(self._run_task, task, completed)
                     futures[fut] = task
 
                 for fut in as_completed(futures):
                     task = futures[fut]
+                    running_ids.discard(task.task_id)
                     try:
                         fut.result()
                     except Exception as exc:
@@ -101,13 +109,14 @@ class TaskGraphEngine:
 
     @staticmethod
     def _get_ready_tasks(
-        task_map: Dict[str, GraphTask], completed: Dict[str, GraphTask]
+        task_map: Dict[str, GraphTask], completed: Dict[str, GraphTask],
+        running_ids: set
     ) -> List[GraphTask]:
         ready = []
         for task in task_map.values():
             if task.task_id in completed:
                 continue
-            if task.status in ("running", "done", "failed"):
+            if task.task_id in running_ids:
                 continue
             if all(dep in completed and completed[dep].status == "done" for dep in task.dependencies):
                 ready.append(task)
