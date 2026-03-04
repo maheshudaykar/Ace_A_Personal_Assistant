@@ -25,7 +25,7 @@ class AgentMessage:
     message_type: str  # request, response, event, error
     payload: Dict[str, Any]
     correlation_id: str
-    timestamp: float = field(default_factory=lambda: time.time())
+    timestamp: float = field(default_factory=time.time)
 
 
 class AgentBus:

@@ -70,8 +70,9 @@ class TaskGraphEngine:
                     elif not running_ids:
                         break
                     else:
-                        # Wait for running tasks to finish
-                        break
+                        # Running tasks in flight — wait for them to complete before
+                        # re-evaluating which tasks are now ready.
+                        continue
 
                 futures = {}
                 for task in ready:

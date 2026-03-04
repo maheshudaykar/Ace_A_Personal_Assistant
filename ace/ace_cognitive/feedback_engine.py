@@ -44,7 +44,7 @@ class FeedbackEngine:
     (ace.ace_memory.episodic_memory) to drive cross-session learning.
     """
 
-    def __init__(self, audit_trail=None) -> None:
+    def __init__(self, audit_trail: Any = None) -> None:
         self._audit = audit_trail
         self._trace = GoldenTrace.get_instance()
         self._entries: Dict[str, FeedbackEntry] = {}

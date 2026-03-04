@@ -107,7 +107,7 @@ class GoldenTrace:
     _instance: 'GoldenTrace | None' = None
     _init_lock = threading.Lock()
 
-    def __new__(cls, audit_trail=None):
+    def __new__(cls, audit_trail: "AuditTrail | None" = None) -> "GoldenTrace":
         """Enforce singleton pattern."""
         if cls._instance is None:
             with cls._init_lock:
@@ -121,7 +121,7 @@ class GoldenTrace:
         return cls._instance
 
     @classmethod
-    def get_instance(cls, audit_trail=None):
+    def get_instance(cls, audit_trail: "AuditTrail | None" = None) -> "GoldenTrace":
         """Get or create singleton instance."""
         if cls._instance is None:
             return cls(audit_trail)

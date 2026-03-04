@@ -5,7 +5,7 @@ import logging
 import time
 import uuid
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Set
 
 from ace.runtime.agent_bus import AgentBus, AgentMessage
 from ace.runtime.golden_trace import GoldenTrace
@@ -63,7 +63,7 @@ class AnalyzerAgent:
     _COHESION_LOW = 3.0
     _GOD_CLASS_DEP_COUNT = 10
 
-    def __init__(self, bus: AgentBus, audit_trail=None) -> None:
+    def __init__(self, bus: AgentBus, audit_trail: Any = None) -> None:
         self._bus = bus
         self._audit = audit_trail
         self._trace = GoldenTrace.get_instance()
@@ -166,7 +166,7 @@ class AnalyzerAgent:
         complexity = min(10.0, len(functions) * 1.5)
 
         # Coupling: unique external imports across all artifacts in file
-        all_deps = set()
+        all_deps: Set[str] = set()
         for a in artifacts:
             all_deps.update(a.dependencies)
         coupling = min(10.0, len(all_deps) * 0.8)

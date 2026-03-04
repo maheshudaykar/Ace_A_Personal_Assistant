@@ -1,4 +1,5 @@
 """Phase 4 cognitive agents test suite – 50+ tests."""
+# pyright: reportUnknownParameterType=false, reportMissingParameterType=false, reportUnknownVariableType=false, reportUnknownMemberType=false, reportUnknownArgumentType=false, reportUnknownLambdaType=false, reportPrivateUsage=false, reportUnusedImport=false
 from __future__ import annotations
 
 import time

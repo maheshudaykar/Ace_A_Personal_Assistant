@@ -28,6 +28,9 @@ from ace.runtime.runtime_config import (
     MAX_OPERATIONS_PER_CYCLE,
     TRACE_ENABLED,
 )
+# Phase 4 additions
+from ace.runtime.agent_bus import AgentBus, AgentMessage
+from ace.runtime.task_graph_engine import GraphTask, TaskGraphEngine
 
 __all__ = [
     "BudgetToken",
@@ -65,4 +68,9 @@ __all__ = [
     "MAX_CONCURRENT_AGENTS",
     "CIRCUIT_BREAKER_RETRY_WINDOW_MINUTES",
     "MAX_CONSECUTIVE_EXECUTIONS_PER_AGENT",
+    # Phase 4
+    "AgentBus",
+    "AgentMessage",
+    "GraphTask",
+    "TaskGraphEngine",
 ]

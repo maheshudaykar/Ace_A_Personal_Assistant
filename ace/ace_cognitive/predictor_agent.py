@@ -74,7 +74,7 @@ class PredictorAgent:
     def __init__(
         self,
         bus: AgentBus,
-        audit_trail=None,
+        audit_trail: Any = None,
         seed: int = _SEED,
     ) -> None:
         self._random = random.Random(seed)
@@ -121,7 +121,12 @@ class PredictorAgent:
         return sorted(results, key=lambda p: p.confidence_score, reverse=True)
 
     def apply_feedback(self, prediction_id: str, positive: bool) -> None:
-        """Update pattern confidence based on user feedback."""
+        """Update pattern confidence based on user feedback.
+
+        Uses a weighted blend (60 % frequency-based, 40 % feedback-based) so
+        that a small number of negative feedback events does not catastrophically
+        zero out a pattern that has been observed many times.
+        """
         pred = self._predictions.get(prediction_id)
         if pred is None:
             return
@@ -134,7 +139,12 @@ class PredictorAgent:
             pattern.feedback_negative += 1
         total = pattern.feedback_positive + pattern.feedback_negative
         if total > 0:
-            pattern.confidence_score = pattern.feedback_positive / total
+            freq_confidence = min(1.0, pattern.frequency / (pattern.frequency + 1))
+            feedback_confidence = pattern.feedback_positive / total
+            # Weighted blend: frequency signal carries 60 %, feedback 40 %
+            pattern.confidence_score = round(
+                0.6 * freq_confidence + 0.4 * feedback_confidence, 6
+            )
         self._log(
             "feedback_applied",
             {"prediction_id": prediction_id, "positive": positive, "new_confidence": pattern.confidence_score},

@@ -13,7 +13,6 @@ Delegation Strategy:
 
 import threading
 import time
-import uuid
 import logging
 from typing import Dict, List, Optional, Callable, Any, Tuple
 from dataclasses import dataclass
@@ -106,7 +105,7 @@ class TaskDelegator:
         self.task_family_affinity: Dict[str, str] = {}
         
         # Callbacks
-        self._on_delegate: Optional[Callable[[DelegatedTask], None]] = None
+        self._on_delegate: Optional[Callable[[DelegatedTask], bool]] = None
         self._on_complete: Optional[Callable[[str, RemoteResult], None]] = None
         
         # Thread safety

@@ -116,7 +116,7 @@ class TransformerAgent:
 
     AGENT_ID = "transformer"
 
-    def __init__(self, bus: AgentBus, audit_trail=None) -> None:
+    def __init__(self, bus: AgentBus, audit_trail: Any = None) -> None:
         self._bus = bus
         self._audit = audit_trail
         self._trace = GoldenTrace.get_instance()

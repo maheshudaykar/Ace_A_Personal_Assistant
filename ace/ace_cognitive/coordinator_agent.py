@@ -7,7 +7,7 @@ import threading
 import time
 import uuid
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
 
 from ace.runtime.agent_bus import AgentBus, AgentMessage
 from ace.runtime.golden_trace import GoldenTrace
@@ -55,12 +55,12 @@ class CoordinatorAgent:
     """
 
     AGENT_ID = "coordinator"
-    MAX_RETRIES = 3
+    MAX_RETRIES: int = 3
 
     def __init__(
         self,
         bus: AgentBus,
-        audit_trail=None,
+        audit_trail: Any = None,
         seed: int = 42,
     ) -> None:
         self._random = random.Random(seed)
@@ -100,7 +100,14 @@ class CoordinatorAgent:
         plan.status = "running"
         self._log("plan_started", {"plan_id": plan.plan_id})
 
-        for step in plan.steps:
+        try:
+            ordered_steps = self._topological_sort_steps(plan.steps)
+        except ValueError:
+            plan.status = "failed"
+            self._log("plan_failed", {"plan_id": plan.plan_id, "error": "cycle detected in workflow steps"})
+            return plan
+
+        for step in ordered_steps:
             if not self._deps_satisfied(step, plan):
                 step.status = "failed"
                 step.error = "dependency failed"
@@ -128,12 +135,38 @@ class CoordinatorAgent:
     # Internal execution
     # ------------------------------------------------------------------
 
+    @staticmethod
+    def _topological_sort_steps(steps: List[WorkflowStep]) -> List[WorkflowStep]:
+        """Kahn’s algorithm — sorts steps so that dependencies always precede dependents."""
+
+        in_degree: Dict[str, int] = {s.step_id: 0 for s in steps}
+        for s in steps:
+            for dep in s.dependencies:
+                if dep in in_degree:
+                    in_degree[s.step_id] += 1
+
+        queue: List[WorkflowStep] = [s for s in steps if in_degree[s.step_id] == 0]
+        sorted_steps: List[WorkflowStep] = []
+        while queue:
+            current = queue.pop(0)
+            sorted_steps.append(current)
+            for s in steps:
+                if current.step_id in s.dependencies:
+                    in_degree[s.step_id] -= 1
+                    if in_degree[s.step_id] == 0:
+                        queue.append(s)
+
+        if len(sorted_steps) != len(steps):
+            raise ValueError("Cycle detected in workflow steps")
+        return sorted_steps
+
     def _execute_step_with_retry(self, step: WorkflowStep, plan: WorkflowPlan) -> None:
         for attempt in range(1, self.MAX_RETRIES + 1):
             step.status = "running"
             try:
                 self._dispatch_step(step, plan)
-                if step.status == "done":
+                current_status = cast(str, step.status)
+                if current_status == "done":
                     return
             except Exception as exc:
                 step.error = str(exc)

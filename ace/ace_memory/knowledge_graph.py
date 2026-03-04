@@ -65,6 +65,11 @@ class KnowledgeGraph:
 
     def add_node(self, node: KGNode) -> KGNode:
         """Add or overwrite a node. Logs to AuditTrail if configured."""
+        if node.node_type not in NODE_TYPES:
+            raise ValueError(
+                f"KnowledgeGraph: invalid node_type {node.node_type!r}. "
+                f"Must be one of {sorted(NODE_TYPES)}"
+            )
         with self._lock:
             self._nodes[node.node_id] = node
             self._out_edges.setdefault(node.node_id, [])
@@ -82,10 +87,25 @@ class KnowledgeGraph:
             if node_id not in self._nodes:
                 return False
             del self._nodes[node_id]
+
+            # Remove outgoing edges and scrub the stale edge-ID from the
+            # *target* node's in_edges index so get_neighbors() stays consistent.
             for eid in list(self._out_edges.pop(node_id, [])):
-                self._edges.pop(eid, None)
+                edge = self._edges.pop(eid, None)
+                if edge is not None:
+                    target_in = self._in_edges.get(edge.target_id)
+                    if target_in is not None and eid in target_in:
+                        target_in.remove(eid)
+
+            # Remove incoming edges and scrub the stale edge-ID from the
+            # *source* node's out_edges index.
             for eid in list(self._in_edges.pop(node_id, [])):
-                self._edges.pop(eid, None)
+                edge = self._edges.pop(eid, None)
+                if edge is not None:
+                    source_out = self._out_edges.get(edge.source_id)
+                    if source_out is not None and eid in source_out:
+                        source_out.remove(eid)
+
         self._audit_write("remove_node", {"node_id": node_id})
         return True
 
@@ -95,6 +115,11 @@ class KnowledgeGraph:
 
     def add_edge(self, edge: KGEdge) -> KGEdge:
         """Add a directed edge. Both source and target nodes must exist."""
+        if edge.edge_type not in EDGE_TYPES:
+            raise ValueError(
+                f"KnowledgeGraph: invalid edge_type {edge.edge_type!r}. "
+                f"Must be one of {sorted(EDGE_TYPES)}"
+            )
         with self._lock:
             if edge.source_id not in self._nodes:
                 raise ValueError(f"KnowledgeGraph: source node {edge.source_id!r} not found")
