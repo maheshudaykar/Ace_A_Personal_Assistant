@@ -28,7 +28,7 @@ import time
 import threading
 import logging
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Set, Any, Tuple
+from typing import Dict, List, Optional, Set, Any, Tuple, cast
 from collections import defaultdict
 import statistics
 
@@ -37,7 +37,6 @@ from .data_structures import (
     AnomalyAlert,
     VoteRecord,
 )
-from .types import TrustLevel
 
 __all__ = [
     "ByzantineDetector",
@@ -54,7 +53,7 @@ class AnomalyResult:
     is_anomalous: bool
     confidence: float  # 0.0-1.0
     anomaly_type: str = ""
-    evidence: Dict[str, Any] = field(default_factory=dict)
+    evidence: Dict[str, Any] = field(default_factory=lambda: cast(Dict[str, Any], {}))
 
 
 @dataclass
@@ -107,6 +106,11 @@ class ByzantineDetector:
         
         # Quarantine list
         self.quarantined_nodes: Set[str] = set()
+
+        # Recovery ratchet: require multiple consecutive positive signals
+        # before decreasing suspicion (prevents alternating good/bad evasion).
+        self._positive_signals: Dict[str, int] = defaultdict(int)
+        self._positive_signals_required = 3
         
         # Thread safety
         self._lock = threading.RLock()
@@ -141,8 +145,8 @@ class ByzantineDetector:
             vote_diverges = vote.voted_for != majority_decision
             
             if vote_diverges:
-                confidence = 0.3  # Low confidence from single vote
                 delta = 0.05  # Small increase per divergence
+                self._positive_signals[node_id] = 0
                 
                 self.suspicion_records[node_id].violation_count += 1
                 self.suspicion_records[node_id].last_violation = time.time()
@@ -166,17 +170,18 @@ class ByzantineDetector:
                     violation_type="vote_divergence",
                 )
             else:
-                # Decrease suspicion if note votes with majority (recovery)
-                old_score = self.suspicion_records[node_id].suspicion_score
-                new_score = max(0.0, old_score - 0.02)  # Small decay
-                self.suspicion_records[node_id].suspicion_score = new_score
+                # Recovery is streak-gated to prevent alternating good/bad evasion.
+                old_score, new_score, delta, reason = self._apply_positive_signal(
+                    node_id,
+                    signal_reason="Voted with majority",
+                )
                 
                 return SuspicionUpdate(
                     node_id=node_id,
                     old_score=old_score,
                     new_score=new_score,
-                    delta=-0.02,
-                    reason="Voted with majority (positive signal)",
+                    delta=delta,
+                    reason=reason,
                     violation_type="vote_agreement",
                 )
     
@@ -214,8 +219,8 @@ class ByzantineDetector:
             
             if not is_valid:
                 # Checksum mismatch - possible corruption or tampering
-                confidence = 0.6  # Medium confidence
                 delta = 0.08  # Moderate increase
+                self._positive_signals[node_id] = 0
                 
                 self.suspicion_records[node_id].violation_count += 1
                 self.suspicion_records[node_id].last_violation = time.time()
@@ -240,17 +245,17 @@ class ByzantineDetector:
                     violation_type="checksum_mismatch",
                 )
             else:
-                # Checksum valid - decrease suspicion (recovery)
-                old_score = self.suspicion_records[node_id].suspicion_score
-                new_score = max(0.0, old_score - 0.02)
-                self.suspicion_records[node_id].suspicion_score = new_score
+                old_score, new_score, delta, reason = self._apply_positive_signal(
+                    node_id,
+                    signal_reason="Checksum valid",
+                )
                 
                 update = SuspicionUpdate(
                     node_id=node_id,
                     old_score=old_score,
                     new_score=new_score,
-                    delta=-0.02,
-                    reason="Checksum valid",
+                    delta=delta,
+                    reason=reason,
                     violation_type="checksum_valid",
                 )
             
@@ -269,7 +274,7 @@ class ByzantineDetector:
         Record node behavior for statistical anomaly detection.
         
         Builds baseline of normal behavior (message frequency, sizes, latency).
-        Detects outliers via statistical deviation (mean ± 2σ).
+        Detects outliers via statistical deviation (mean +/- 2 sigma).
         
         Args:
             node_id: Node being analyzed
@@ -329,7 +334,7 @@ class ByzantineDetector:
             latency_mean = statistics.mean(latencies)
             latency_stdev = statistics.stdev(latencies) if len(set(latencies)) > 1 else 0
             
-            # Detect outliers (>2σ from mean)
+            # Detect outliers (>2 sigma from mean)
             outliers = 0
             for msg in recent[-5:]:  # Check last 5
                 size_z = abs((msg["size"] - size_mean) / (size_stdev + 1e-6))
@@ -507,6 +512,7 @@ class ByzantineDetector:
             
             # Reset suspicion (requires manual approval in production)
             self.quarantined_nodes.discard(node_id)
+            self._positive_signals[node_id] = 0
             if node_id in self.suspicion_records:
                 self.suspicion_records[node_id].suspicion_score = 0.1  # Low score after recovery
             
@@ -544,8 +550,35 @@ class ByzantineDetector:
         if node_id not in self.behavioral_baseline:
             self.behavioral_baseline[node_id] = BehavioralBaseline()
 
+    def _apply_positive_signal(
+        self,
+        node_id: str,
+        signal_reason: str,
+    ) -> Tuple[float, float, float, str]:
+        """Apply streak-gated recovery decay from a positive signal."""
+        old_score = self.suspicion_records[node_id].suspicion_score
+        self._positive_signals[node_id] += 1
+
+        if self._positive_signals[node_id] >= self._positive_signals_required:
+            new_score = max(0.0, old_score - 0.02)
+            self.suspicion_records[node_id].suspicion_score = new_score
+            self._positive_signals[node_id] = 0
+            return old_score, new_score, -0.02, f"{signal_reason} (recovery applied)"
+
+        remaining = self._positive_signals_required - self._positive_signals[node_id]
+        return old_score, old_score, 0.0, (
+            f"{signal_reason} (recovery pending: {remaining} more positive signal(s))"
+        )
+
 
 @dataclass
 class BehavioralBaseline:
     """Baseline model for node behavior."""
-    messages: List[Dict[str, Any]] = field(default_factory=list)
+    messages: List[Dict[str, Any]] = field(default_factory=lambda: cast(List[Dict[str, Any]], []))
+
+
+
+
+
+
+

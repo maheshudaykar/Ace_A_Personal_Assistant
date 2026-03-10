@@ -131,11 +131,17 @@ class QualityScorer:
 
         return scored
 
-    def _compute_task_success_bonus(self, task_id: str) -> float:
-        """Compute success bonus from evaluation metrics."""
-        # For now, return default 0.5 (neutral)
-        # In full implementation, query evaluation_engine for task success
-        # report = self._evaluation.report()
-        # If task_id in failures, reduce to 0.3
-        # If task_id in successes, increase to 0.7
+    def _compute_task_success_bonus(self, _task_id: str) -> float:
+        """Compute success bonus from evaluation metrics.
+
+        Uses the global success_rate from the evaluation engine as a proxy
+        for task-level health. Returns 0.5 (neutral) when no data is available.
+        """
+        try:
+            report = self._evaluation.report()
+            task_count = report.get("task_count", 0.0)
+            if task_count > 0:
+                return max(0.0, min(1.0, report.get("success_rate", 0.5)))
+        except (AttributeError, TypeError, ValueError):
+            return 0.5
         return 0.5

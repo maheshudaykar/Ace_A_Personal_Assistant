@@ -16,19 +16,17 @@ Design Principle:
 - NO distributed locks (only leader performs mutations, followers replicate)
 """
 
-import hashlib
 import time
 import threading
 import uuid
 import logging
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Tuple, Any, Set
+from typing import Dict, List, Optional, Any, Set, cast
 from collections import defaultdict
 
 from .data_structures import (
     MemoryWriteProposal,
     WriteProposalResponse,
-    MemorySyncPacket,
 )
 
 __all__ = [
@@ -45,7 +43,7 @@ class MemoryQuotaStatus:
     """Current memory quota status."""
     total_entries: int = 0
     active_entries: int = 0
-    per_task_entries: Dict[str, int] = field(default_factory=dict)
+    per_task_entries: Dict[str, int] = field(default_factory=lambda: cast(Dict[str, int], {}))
     
     quota_total: int = 10000
     quota_active: int = 5000
@@ -120,8 +118,8 @@ class DistributedMemorySync:
         self.consolidation_threshold = consolidation_threshold
         
         # Memory storage
-        self.entries: Dict[str, Dict[str, Any]] = {}  # UUID → entry data
-        self.entry_metadata: Dict[str, Dict[str, Any]] = {}  # UUID → metadata
+        self.entries: Dict[str, Dict[str, Any]] = {}  # UUID -> entry data
+        self.entry_metadata: Dict[str, Dict[str, Any]] = {}  # UUID -> metadata
         
         # Monotonic log index counter (never decreases, survives consolidations/deletions)
         self._log_index_counter: int = 0
@@ -130,11 +128,16 @@ class DistributedMemorySync:
         self.quota_status = MemoryQuotaStatus()
         
         # Task-specific entry tracking
-        self.task_entries: Dict[str, Set[str]] = defaultdict(set)  # task_id → {entry_uuids}
+        self.task_entries: Dict[str, Set[str]] = defaultdict(set)  # task_id -> {entry_uuids}
         
         # Write tracking
-        self.pending_proposals: Dict[str, MemoryWriteProposal] = {}  # proposal_id → proposal
-        self.accepted_writes: Dict[str, Dict[str, Any]] = {}  # proposal_id → write_data
+        self.pending_proposals: Dict[str, MemoryWriteProposal] = {}  # proposal_id -> proposal
+        self.accepted_writes: Dict[str, Dict[str, Any]] = {}  # proposal_id -> write_data
+
+        # In-flight quota reservations during validate->commit window.
+        self._reserved_total_entries = 0
+        self._reserved_active_entries = 0
+        self._reserved_per_task: Dict[str, int] = defaultdict(int)
         
         # Conflict history
         self.conflicts: List[Dict[str, Any]] = []
@@ -219,9 +222,11 @@ class DistributedMemorySync:
         
         with self._lock:
             task_id = proposal.task_id
+            is_active = proposal.entry.get("is_active", True)
             
-            # Check quotas (leader authority)
-            if self.quota_status.total_entries >= self.quota_status.quota_total:
+            # Check quotas against effective usage (committed + in-flight reservations).
+            effective_total = self.quota_status.total_entries + self._reserved_total_entries
+            if effective_total >= self.quota_status.quota_total:
                 logger.warning(f"Proposal rejected: total quota exceeded ({self.quota_status.total_entries})")
                 return WriteProposalResponse(
                     proposal_id=proposal.proposal_id,
@@ -229,7 +234,8 @@ class DistributedMemorySync:
                     reason="Total quota exceeded",
                 )
             
-            if self.quota_status.active_entries >= self.quota_status.quota_active:
+            effective_active = self.quota_status.active_entries + self._reserved_active_entries
+            if is_active and effective_active >= self.quota_status.quota_active:
                 logger.warning(f"Proposal rejected: active quota exceeded ({self.quota_status.active_entries})")
                 return WriteProposalResponse(
                     proposal_id=proposal.proposal_id,
@@ -237,7 +243,7 @@ class DistributedMemorySync:
                     reason="Active quota exceeded",
                 )
             
-            task_count = len(self.task_entries.get(task_id, set()))
+            task_count = len(self.task_entries.get(task_id, set())) + self._reserved_per_task.get(task_id, 0)
             if task_count >= self.quota_status.quota_per_task:
                 logger.warning(f"Proposal rejected: per-task quota exceeded for {task_id} ({task_count})")
                 return WriteProposalResponse(
@@ -245,50 +251,54 @@ class DistributedMemorySync:
                     accepted=False,
                     reason="Per-task quota exceeded",
                 )
+
+            self._reserve_quota(task_id=task_id, is_active=is_active)
             
-            # All quotas valid - accept proposal
-            entry_uuid = str(uuid.uuid4())
-            raft_log_index = self._get_next_log_index()
-            
-            # Store entry
-            self.entries[entry_uuid] = proposal.entry
-            self.entry_metadata[entry_uuid] = {
-                "uuid": entry_uuid,
-                "task_id": task_id,
-                "timestamp": proposal.timestamp,
-                "quality_score": proposal.entry.get("quality_score", 0.5),
-                "source_node": proposal.node_id,
-                "raft_log_index": raft_log_index,
-            }
-            
-            # Track in task entries
-            self.task_entries[task_id].add(entry_uuid)
-            
-            # Update quota status
-            self.quota_status.total_entries += 1
-            is_active = proposal.entry.get("is_active", True)
-            if is_active:
-                self.quota_status.active_entries += 1
-            self.quota_status.per_task_entries[task_id] = self.quota_status.per_task_entries.get(task_id, 0) + 1
-            
-            # Track accepted write
-            self.accepted_writes[proposal.proposal_id] = {
-                "entry_uuid": entry_uuid,
-                "raft_log_index": raft_log_index,
-                "timestamp": time.time(),
-            }
-            
-            logger.info(
-                f"Proposal {proposal.proposal_id} ACCEPTED by leader: "
-                f"entry={entry_uuid}, raft_index={raft_log_index}, "
-                f"quota={self.quota_status.total_entries}/{self.quota_status.quota_total}"
-            )
-            
-            return WriteProposalResponse(
-                proposal_id=proposal.proposal_id,
-                accepted=True,
-                raft_log_index=raft_log_index,
-            )
+            try:
+                # All quotas valid - accept proposal
+                entry_uuid = str(uuid.uuid4())
+                raft_log_index = self._get_next_log_index()
+                
+                # Store entry
+                self.entries[entry_uuid] = proposal.entry
+                self.entry_metadata[entry_uuid] = {
+                    "uuid": entry_uuid,
+                    "task_id": task_id,
+                    "timestamp": proposal.timestamp,
+                    "quality_score": proposal.entry.get("quality_score", 0.5),
+                    "source_node": proposal.node_id,
+                    "raft_log_index": raft_log_index,
+                }
+                
+                # Track in task entries
+                self.task_entries[task_id].add(entry_uuid)
+                
+                # Update quota status
+                self.quota_status.total_entries += 1
+                if is_active:
+                    self.quota_status.active_entries += 1
+                self.quota_status.per_task_entries[task_id] = self.quota_status.per_task_entries.get(task_id, 0) + 1
+                
+                # Track accepted write
+                self.accepted_writes[proposal.proposal_id] = {
+                    "entry_uuid": entry_uuid,
+                    "raft_log_index": raft_log_index,
+                    "timestamp": time.time(),
+                }
+                
+                logger.info(
+                    f"Proposal {proposal.proposal_id} ACCEPTED by leader: "
+                    f"entry={entry_uuid}, raft_index={raft_log_index}, "
+                    f"quota={self.quota_status.total_entries}/{self.quota_status.quota_total}"
+                )
+                
+                return WriteProposalResponse(
+                    proposal_id=proposal.proposal_id,
+                    accepted=True,
+                    raft_log_index=raft_log_index,
+                )
+            finally:
+                self._release_quota_reservation(task_id=task_id, is_active=is_active)
     
     # ==================== MEMORY REPLICATION ====================
     
@@ -299,7 +309,7 @@ class DistributedMemorySync:
         raft_log_index: int,
     ) -> None:
         """
-        Leader replicates accepted write via Raft log (leader → followers).
+        Leader replicates accepted write via Raft log (leader -> followers).
         
         This is called after leader accepts proposal.
         Raft log provides total ordering via log index.
@@ -450,7 +460,7 @@ class DistributedMemorySync:
             self.quota_status.total_entries = len(self.entries)
             
             # Update per-task quotas
-            for task_id in list(self.quota_status.per_task_entries.keys()):
+            for task_id in self.quota_status.per_task_entries:
                 self.quota_status.per_task_entries[task_id] = len(self.task_entries.get(task_id, set()))
             
             result = ConsolidationResult(
@@ -496,24 +506,21 @@ class DistributedMemorySync:
             if new_ts > existing_ts:
                 winner = "new"
                 chosen = new_data
-            elif existing_ts > new_ts:
-                winner = "existing"
-                chosen = existing_data
             else:
-                # Timestamps equal, compare quality
-                new_quality = new_data.get("quality_score", 0.5)
-                existing_quality = existing_data.get("quality_score", 0.5)
-                
-                if new_quality > existing_quality:
-                    winner = "new"
-                    chosen = new_data
-                elif existing_quality > new_quality:
+                if existing_ts > new_ts:
                     winner = "existing"
                     chosen = existing_data
                 else:
-                    # Quality equal, keep existing (stable)
-                    winner = "existing"
-                    chosen = existing_data
+                    # Timestamps equal, compare quality.
+                    new_quality = new_data.get("quality_score", 0.5)
+                    existing_quality = existing_data.get("quality_score", 0.5)
+                    if new_quality > existing_quality:
+                        winner = "new"
+                        chosen = new_data
+                    else:
+                        # Keep existing for either higher/equal quality (stable tie-break).
+                        winner = "existing"
+                        chosen = existing_data
             
             logger.info(f"Conflict resolved for {entry_uuid}: {winner} entry wins")
             
@@ -564,3 +571,23 @@ class DistributedMemorySync:
         with self._lock:
             self._log_index_counter += 1
             return self._log_index_counter
+
+    def _reserve_quota(self, task_id: str, is_active: bool) -> None:
+        """Reserve quota during the validation-to-commit window."""
+        self._reserved_total_entries += 1
+        if is_active:
+            self._reserved_active_entries += 1
+        self._reserved_per_task[task_id] += 1
+
+    def _release_quota_reservation(self, task_id: str, is_active: bool) -> None:
+        """Release a previously taken quota reservation."""
+        self._reserved_total_entries = max(0, self._reserved_total_entries - 1)
+        if is_active:
+            self._reserved_active_entries = max(0, self._reserved_active_entries - 1)
+
+        current = self._reserved_per_task.get(task_id, 0)
+        if current <= 1:
+            self._reserved_per_task.pop(task_id, None)
+        else:
+            self._reserved_per_task[task_id] = current - 1
+
