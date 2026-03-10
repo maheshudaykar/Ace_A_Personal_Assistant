@@ -10,6 +10,7 @@ from typing import Any, Dict, List, Set
 from ace.runtime.agent_bus import AgentBus, AgentMessage
 from ace.runtime.golden_trace import GoldenTrace
 from ace.ace_cognitive.transformer_agent import DependencyGraph, CodeArtifact
+from ace.ace_memory.project_memory import ProjectMemory
 
 __all__ = ["ArchitectureMetrics", "RefactoringProposal", "AnalyzerAgent"]
 
@@ -63,9 +64,15 @@ class AnalyzerAgent:
     _COHESION_LOW = 3.0
     _GOD_CLASS_DEP_COUNT = 10
 
-    def __init__(self, bus: AgentBus, audit_trail: Any = None) -> None:
+    def __init__(
+        self,
+        bus: AgentBus,
+        audit_trail: Any = None,
+        project_memory: ProjectMemory | None = None,
+    ) -> None:
         self._bus = bus
         self._audit = audit_trail
+        self._project_memory = project_memory
         self._trace = GoldenTrace.get_instance()
         self._metrics: Dict[str, ArchitectureMetrics] = {}
         self._proposals: Dict[str, RefactoringProposal] = {}
@@ -142,6 +149,17 @@ class AnalyzerAgent:
                 proposals.append(p)
 
         # Store and sort by priority descending
+        critical_paths = set()
+        if self._project_memory is not None:
+            # Query long-term repository memory before final architectural ranking.
+            for snapshot in self._project_memory.repositories.values():
+                critical_paths.update(snapshot.critical_modules)
+
+        for proposal in proposals:
+            normalized = proposal.target_artifact.replace("\\", "/")
+            if normalized in critical_paths:
+                proposal.priority += 1.0
+
         proposals.sort(key=lambda p: p.priority, reverse=True)
         for p in proposals:
             self._proposals[p.proposal_id] = p

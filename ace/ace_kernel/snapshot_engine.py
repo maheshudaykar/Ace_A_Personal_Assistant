@@ -48,6 +48,9 @@ class SnapshotEngine:
 
         with self._lock:
             path.write_text(payload, encoding="utf-8")
+            # Store the hash alongside payload for future verification
+            hash_path = self._dir / f"snapshot_{snapshot_id}.sha256"
+            hash_path.write_text(state_hash, encoding="utf-8")
             record = SnapshotRecord(
                 snapshot_id=snapshot_id,
                 timestamp=timestamp,
@@ -66,34 +69,58 @@ class SnapshotEngine:
             return record
 
     def restore_state(self, snapshot_id: str) -> Dict[str, Any]:
-        """Restore a snapshot by ID after validating its hash."""
+        """Restore a snapshot by ID after validating its hash and structure."""
         path = self._dir / f"snapshot_{snapshot_id}.json"
         if not path.exists():
             raise FileNotFoundError(f"Snapshot not found: {snapshot_id}")
 
         with self._lock:
             payload = path.read_text(encoding="utf-8")
-            state_hash = sha256(payload.encode("utf-8")).hexdigest()
-            state = json.loads(payload)
+            actual_hash = sha256(payload.encode("utf-8")).hexdigest()
+
+            # Verify against stored hash if available
+            hash_path = self._dir / f"snapshot_{snapshot_id}.sha256"
+            if hash_path.exists():
+                stored_hash = hash_path.read_text(encoding="utf-8").strip()
+                if actual_hash != stored_hash:
+                    raise ValueError(
+                        f"Snapshot integrity check failed for {snapshot_id}: "
+                        f"stored={stored_hash[:16]}... actual={actual_hash[:16]}..."
+                    )
+
+            try:
+                state = json.loads(payload)
+            except json.JSONDecodeError as exc:
+                raise ValueError(f"Corrupted snapshot {snapshot_id}: {exc}") from exc
+
+            if not isinstance(state, dict):
+                raise ValueError(f"Snapshot {snapshot_id} root is not a dict")
+
             self._audit.append(
                 {
                     "type": "snapshot.restore",
                     "snapshot_id": snapshot_id,
-                    "state_hash": state_hash,
+                    "state_hash": actual_hash,
                     "path": str(path),
                 }
             )
             return state
 
     def validate_snapshot(self, snapshot_id: str) -> bool:
-        """Validate snapshot file hash against its content."""
+        """Validate snapshot file hash against its stored hash and content."""
         path = self._dir / f"snapshot_{snapshot_id}.json"
         if not path.exists():
             return False
         payload = path.read_text(encoding="utf-8")
-        state_hash = sha256(payload.encode("utf-8")).hexdigest()
+        actual_hash = sha256(payload.encode("utf-8")).hexdigest()
         try:
             json.loads(payload)
         except json.JSONDecodeError:
             return False
-        return len(state_hash) == 64
+        # Verify against stored hash if available
+        hash_path = self._dir / f"snapshot_{snapshot_id}.sha256"
+        if hash_path.exists():
+            stored_hash = hash_path.read_text(encoding="utf-8").strip()
+            if actual_hash != stored_hash:
+                return False
+        return True

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import threading
 from typing import Dict, List
 
 
@@ -24,14 +25,19 @@ class EvaluationEngine:
 
     def __init__(self) -> None:
         self._records: List[TaskMetrics] = []
+        self._lock = threading.RLock()
 
     def record_task(self, metrics: TaskMetrics) -> None:
         """Record metrics for a completed task."""
-        self._records.append(metrics)
+        with self._lock:
+            self._records.append(metrics)
 
     def report(self) -> Dict[str, float]:
         """Generate aggregated performance report."""
-        total = len(self._records)
+        with self._lock:
+            records = list(self._records)
+
+        total = len(records)
         if total == 0:
             return {
                 "task_count": 0,
@@ -42,12 +48,12 @@ class EvaluationEngine:
                 "total_tokens": 0.0,
             }
 
-        successes = sum(1 for r in self._records if r.success)
-        steps = sum(r.steps for r in self._records)
-        tool_successes = sum(r.tool_successes for r in self._records)
-        tool_failures = sum(r.tool_failures for r in self._records)
-        cpu_time = sum(r.cpu_time_ms for r in self._records)
-        tokens = sum(r.tokens_used for r in self._records)
+        successes = sum(1 for r in records if r.success)
+        steps = sum(r.steps for r in records)
+        tool_successes = sum(r.tool_successes for r in records)
+        tool_failures = sum(r.tool_failures for r in records)
+        cpu_time = sum(r.cpu_time_ms for r in records)
+        tokens = sum(r.tokens_used for r in records)
         tool_total = tool_successes + tool_failures
 
         return {
@@ -61,4 +67,5 @@ class EvaluationEngine:
 
     def reset(self) -> None:
         """Clear recorded metrics."""
-        self._records.clear()
+        with self._lock:
+            self._records.clear()

@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, List, Sequence
+from typing import Iterable, List, Optional, Sequence
+from urllib.parse import urlparse
 
 from ace.ace_kernel.audit_trail import AuditTrail
 from ace.ace_kernel.nuclear_switch import NuclearSwitch
@@ -32,7 +33,12 @@ class SecurityMonitor:
         self._audit = audit_trail
         self._nuclear = nuclear_switch
         self._root = Path(workspace_root).resolve()
-        self._allowed_hosts = set(allowed_hosts or [])
+        self._allowed_hosts = {
+            normalized
+            for host in (allowed_hosts or [])
+            for normalized in [self._normalize_host(host)]
+            if normalized is not None
+        }
 
     def evaluate_tool_call(
         self,
@@ -51,14 +57,20 @@ class SecurityMonitor:
 
         if write_paths:
             for path in write_paths:
-                resolved = Path(path).resolve()
+                try:
+                    resolved = Path(path).resolve()
+                except (OSError, RuntimeError, ValueError):
+                    reasons.append(f"write_path_invalid:{path}")
+                    risk += 0.4
+                    continue
                 if not self._is_within_root(resolved):
                     reasons.append(f"write_outside_workspace:{resolved}")
                     risk += 0.4
 
         if network_hosts:
             for host in network_hosts:
-                if host not in self._allowed_hosts:
+                normalized = self._normalize_host(host)
+                if normalized is None or normalized not in self._allowed_hosts:
                     reasons.append(f"network_host_blocked:{host}")
                     risk += 0.3
 
@@ -74,6 +86,13 @@ class SecurityMonitor:
             }
         )
         return decision
+
+    @staticmethod
+    def _normalize_host(host: str) -> Optional[str]:
+        parsed = urlparse(host)
+        candidate = parsed.hostname or host
+        candidate = candidate.strip().lower().rstrip(".")
+        return candidate or None
 
     def _is_within_root(self, path: Path) -> bool:
         try:

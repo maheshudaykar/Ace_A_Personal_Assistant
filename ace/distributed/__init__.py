@@ -30,6 +30,12 @@ from .task_delegator import TaskDelegator
 from .health_monitor import HealthMonitor
 from .remote_logging import RemoteLogging
 from .ssh_orchestrator import SSHOrchestrator
+from .distributed_planner import DistributedPlanner, DistributedPlan, PlacementDecision
+from .higher_level_orchestrator import HigherLevelOrchestrator, DistributedWorkflowResult
+from .memory_federation import MemoryFederation, FederatedRecord, ConflictResolution
+from .node_trust_manager import NodeTrustManager, CapabilityClass, NodeCapabilityPolicy
+from .failover_orchestrator import FailoverOrchestrator, FailoverEvent
+from .consistency_checker import DistributedConsistencyChecker
 
 __version__ = "3.0.0"
 __all__ = [
@@ -41,4 +47,18 @@ __all__ = [
     "HealthMonitor",
     "RemoteLogging",
     "SSHOrchestrator",
+    "DistributedPlanner",
+    "DistributedPlan",
+    "PlacementDecision",
+    "HigherLevelOrchestrator",
+    "DistributedWorkflowResult",
+    "MemoryFederation",
+    "FederatedRecord",
+    "ConflictResolution",
+    "NodeTrustManager",
+    "CapabilityClass",
+    "NodeCapabilityPolicy",
+    "FailoverOrchestrator",
+    "FailoverEvent",
+    "DistributedConsistencyChecker",
 ]

@@ -79,10 +79,14 @@ class TestDeterministicMode:
         assert vals1 != vals2
 
     def test_get_llm_temperature(self) -> None:
-        """Test get_llm_temperature static method."""
+        """Test get_llm_temperature static method returns base temp.
+
+        The static method returns the caller's base temperature; callers
+        should check ``.enabled`` to decide whether to override to 0.0.
+        """
         result = DeterministicMode.get_llm_temperature(0.7)
-        assert result == 0.0
+        assert result == 0.7
 
         result2 = DeterministicMode.get_llm_temperature(0.1)
-        assert result2 == 0.0
+        assert result2 == 0.1
 

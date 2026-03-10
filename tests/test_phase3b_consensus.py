@@ -78,7 +78,7 @@ class TestLeaderElection:
         assert initial_role == NodeRole.FOLLOWER
         
         # start_election transitions to CANDIDATE immediately (before collecting votes)
-        result = engine.start_election()
+        engine.start_election()
         
         # After election, either LEADER or FOLLOWER (depending on vote outcome)
         assert engine.get_role() in [NodeRole.LEADER, NodeRole.FOLLOWER, NodeRole.CANDIDATE]
@@ -225,7 +225,7 @@ class TestHeartbeatAndTimeout:
         assert follower.check_election_timeout() is False
         
         # Manipulate deadline to past for test
-        follower._election_deadline = time.time() - 1.0
+        follower._election_deadline = time.monotonic() - 1.0
         
         assert follower.check_election_timeout() is True
     
@@ -235,7 +235,7 @@ class TestHeartbeatAndTimeout:
         engine.start_election()  # Become leader
         
         # Manipulate deadline to past
-        engine._election_deadline = time.time() - 1.0
+        engine._election_deadline = time.monotonic() - 1.0
         
         # Still no timeout because leader
         assert engine.check_election_timeout() is False
@@ -246,9 +246,6 @@ class TestDeterministicReplay:
     
     def test_election_determinism(self):
         """Multiple engines with same node_id produce same election behavior."""
-        nodes_1 = ["node_1", "node_2", "node_3"]
-        nodes_2 = ["node_1", "node_2", "node_3"]
-        
         engine_1 = ConsensusEngine(node_id="node_1", peer_nodes=["node_2", "node_3"])
         engine_2 = ConsensusEngine(node_id="node_1", peer_nodes=["node_2", "node_3"])
         
@@ -308,7 +305,7 @@ class TestRaftSafetyProperties:
         
         # Append and commit entries
         for i in range(3):
-            entry = leader.append_entry(LogEntryType.TASK, {"id": i})
+            leader.append_entry(LogEntryType.TASK, {"id": i})
         
         # Simulate majority replication
         leader.state.match_index["follower"] = 3

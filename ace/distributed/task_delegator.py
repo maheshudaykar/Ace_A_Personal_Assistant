@@ -77,6 +77,7 @@ class TaskDelegator:
         node_registry: NodeRegistry,
         local_cpu_cores: int = 4,
         local_ram_gb: float = 8.0,
+        max_task_retries: int = 3,
     ):
         """
         Initialize TaskDelegator.
@@ -91,6 +92,7 @@ class TaskDelegator:
         self.node_registry = node_registry
         self.local_cpu_cores = local_cpu_cores
         self.local_ram_gb = local_ram_gb
+        self.max_task_retries = max(1, max_task_retries)
         
         # Local load tracking
         self.current_load: float = 0.0  # 0.0-1.0
@@ -100,6 +102,7 @@ class TaskDelegator:
         self.delegation_decisions: List[DelegationDecision] = []
         self.delegated_tasks: Dict[str, DelegatedTask] = {}
         self.task_results: Dict[str, RemoteResult] = {}
+        self.task_retry_counts: Dict[str, int] = {}
         
         # Sticky sessions (task_family → preferred_node)
         self.task_family_affinity: Dict[str, str] = {}
@@ -107,6 +110,7 @@ class TaskDelegator:
         # Callbacks
         self._on_delegate: Optional[Callable[[DelegatedTask], bool]] = None
         self._on_complete: Optional[Callable[[str, RemoteResult], None]] = None
+        self._submit_local: Optional[Callable[[str, Dict[str, Any]], str]] = None
         
         # Thread safety
         self._lock = threading.RLock()
@@ -236,6 +240,20 @@ class TaskDelegator:
             True if submission successful
         """
         with self._lock:
+            retries = self.task_retry_counts.get(task.task_id, 0)
+            if retries >= self.max_task_retries:
+                logger.warning(
+                    "Task %s exceeded max retries (%d)",
+                    task.task_id,
+                    self.max_task_retries,
+                )
+                return False
+
+            if not self.node_registry.assign_task(task.target_node):
+                logger.warning("Node %s cannot accept more tasks", task.target_node)
+                return False
+
+            self.task_retry_counts[task.task_id] = retries + 1
             task.submitted_at = time.time()
             self.delegated_tasks[task.task_id] = task
             
@@ -292,6 +310,9 @@ class TaskDelegator:
         """
         with self._lock:
             self.task_results[task_id] = result
+            delegated = self.delegated_tasks.pop(task_id, None)
+            if delegated is not None:
+                self.node_registry.release_task(delegated.target_node)
             
             logger.debug(
                 f"Remote result for {task_id}: success={result.success}, "
@@ -341,6 +362,7 @@ class TaskDelegator:
             submit_remote_task: Callback to submit remote task
         """
         self._on_delegate = submit_remote_task
+        self._submit_local = submit_local_task
         logger.info("TaskDelegator integrated with AgentScheduler")
     
     # ==================== HISTORY & ANALYTICS ====================

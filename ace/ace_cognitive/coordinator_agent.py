@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import logging
-import random
 import threading
 import time
 import uuid
@@ -61,9 +60,7 @@ class CoordinatorAgent:
         self,
         bus: AgentBus,
         audit_trail: Any = None,
-        seed: int = 42,
     ) -> None:
-        self._random = random.Random(seed)
         self._bus = bus
         self._audit = audit_trail
         self._trace = GoldenTrace.get_instance()
@@ -136,14 +133,20 @@ class CoordinatorAgent:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _topological_sort_steps(steps: List[WorkflowStep]) -> List[WorkflowStep]:
-        """Kahn’s algorithm — sorts steps so that dependencies always precede dependents."""
-
+    def _compute_in_degrees(steps: List[WorkflowStep]) -> Dict[str, int]:
+        """Return a mapping of step_id to unresolved dependency count."""
         in_degree: Dict[str, int] = {s.step_id: 0 for s in steps}
         for s in steps:
             for dep in s.dependencies:
                 if dep in in_degree:
                     in_degree[s.step_id] += 1
+        return in_degree
+
+    @staticmethod
+    def _topological_sort_steps(steps: List[WorkflowStep]) -> List[WorkflowStep]:
+        """Kahn’s algorithm — sorts steps so that dependencies always precede dependents."""
+
+        in_degree = CoordinatorAgent._compute_in_degrees(steps)
 
         queue: List[WorkflowStep] = [s for s in steps if in_degree[s.step_id] == 0]
         sorted_steps: List[WorkflowStep] = []
@@ -184,7 +187,7 @@ class CoordinatorAgent:
             {"plan_id": plan.plan_id, "step_id": step.step_id, "error": step.error},
         )
 
-    def _dispatch_step(self, step: WorkflowStep, plan: WorkflowPlan) -> None:
+    def _dispatch_step(self, step: WorkflowStep, _plan: WorkflowPlan) -> None:
         """Send step to target agent via AgentBus and wait for response."""
         corr_id = str(uuid.uuid4())
         response_holder: Dict[str, Any] = {}

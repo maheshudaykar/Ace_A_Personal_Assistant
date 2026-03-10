@@ -1,4 +1,4 @@
-"""Agent scheduler with priority queue and concurrency caps."""
+﻿"""Agent scheduler with priority queue and concurrency caps."""
 
 from __future__ import annotations
 
@@ -34,6 +34,7 @@ class AgentScheduler:
         self._executor = ThreadPoolExecutor(max_workers=max_agents)
         self._lock = threading.Lock()
         self._active_count = 0
+        self._inflight_futures: set[int] = set()
 
     def submit(
         self,
@@ -65,6 +66,7 @@ class AgentScheduler:
                 self._active_count += 1
                 slots -= 1
                 future = self._executor.submit(task.func, *task.args, **task.kwargs)
+                self._inflight_futures.add(id(future))
                 future.add_done_callback(self._on_task_done)
                 futures.append(future)
         return futures
@@ -72,9 +74,11 @@ class AgentScheduler:
     def stats(self) -> Dict[str, int]:
         """Return scheduler stats for monitoring."""
         with self._lock:
+            # Keep counters bounded if completions race with config updates.
+            active_count = min(self._active_count, len(self._inflight_futures))
             return {
                 "queue_size": len(self._queue),
-                "active_count": self._active_count,
+                "active_count": active_count,
                 "max_agents": self._max_agents,
             }
 
@@ -87,8 +91,12 @@ class AgentScheduler:
 
     def shutdown(self) -> None:
         """Shutdown the scheduler executor."""
-        self._executor.shutdown(wait=False)
+        self._executor.shutdown(wait=True)
 
     def _on_task_done(self, _future: Future[Any]) -> None:
         with self._lock:
-            self._active_count = max(0, self._active_count - 1)
+            future_key = id(_future)
+            if future_key in self._inflight_futures:
+                self._inflight_futures.remove(future_key)
+                self._active_count = max(0, self._active_count - 1)
+

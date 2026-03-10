@@ -68,6 +68,7 @@ class NodeRegistry:
         self.cluster_size = cluster_size
         self.nodes: Dict[str, NodeRecord] = {}
         self.node_lock = threading.RLock()
+        self._assigned_tasks: Dict[str, int] = {}
         
         logger.info(f"NodeRegistry initialized for cluster size {cluster_size}")
     
@@ -96,6 +97,7 @@ class NodeRegistry:
             
             # Store node
             self.nodes[node_record.node_id] = node_record
+            self._assigned_tasks.setdefault(node_record.node_id, 0)
             
             logger.info(
                 f"Node registered: {node_record.node_id} "
@@ -125,8 +127,31 @@ class NodeRegistry:
                 return False
             
             del self.nodes[node_id]
+            self._assigned_tasks.pop(node_id, None)
             logger.info(f"Node deregistered: {node_id} (reason: {reason})")
             return True
+
+    def can_accept_task(self, node_id: str) -> bool:
+        """Check if node has room for another distributed task."""
+        with self.node_lock:
+            node = self.nodes.get(node_id)
+            if node is None:
+                return False
+            assigned = self._assigned_tasks.get(node_id, 0)
+            return assigned < node.capabilities.max_concurrent_tasks
+
+    def assign_task(self, node_id: str) -> bool:
+        """Reserve one task slot on a node for deterministic scheduling."""
+        with self.node_lock:
+            if not self.can_accept_task(node_id):
+                return False
+            self._assigned_tasks[node_id] = self._assigned_tasks.get(node_id, 0) + 1
+            return True
+
+    def release_task(self, node_id: str) -> None:
+        """Release one previously assigned task slot."""
+        with self.node_lock:
+            self._assigned_tasks[node_id] = max(0, self._assigned_tasks.get(node_id, 0) - 1)
     
     # ==================== NODE STATUS ====================
     
@@ -332,7 +357,9 @@ class NodeRegistry:
         )
         
         if matches_sorted:
-            return matches_sorted[0].node_id
+            for candidate in matches_sorted:
+                if self.can_accept_task(candidate.node_id):
+                    return candidate.node_id
         
         return None
     

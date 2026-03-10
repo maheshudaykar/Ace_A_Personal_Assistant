@@ -9,6 +9,13 @@ from ace.ace_cognitive.analyzer_agent import AnalyzerAgent, ArchitectureMetrics,
 from ace.ace_cognitive.simulator_agent import SimulatorAgent, SimulationResult
 from ace.ace_cognitive.reflection_agent import ReflectionAgent, ReflectionResult
 from ace.ace_cognitive.feedback_engine import FeedbackEngine, FeedbackEntry, ModelUpdate
+from ace.ace_cognitive.planning_engine import (
+    GoalSpecification,
+    HierarchicalPlan,
+    PlanningEngine,
+    PlanningStrategy,
+    TaskNode,
+)
 
 __all__ = [
     # Coordinator
@@ -24,4 +31,6 @@ __all__ = [
     # Reflection & learning
     "ReflectionAgent", "ReflectionResult",
     "FeedbackEngine", "FeedbackEntry", "ModelUpdate",
+    # Planning layer
+    "PlanningEngine", "PlanningStrategy", "GoalSpecification", "TaskNode", "HierarchicalPlan",
 ]

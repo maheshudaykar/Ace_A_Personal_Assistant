@@ -18,7 +18,7 @@ def test_balanced_mode() -> None:
     profile = profiler.enforce_limits(ram_mb=4096, vram_mb=0)
 
     assert profile.mode == "balanced"
-    assert profile.max_agents == 4
+    assert profile.max_agents == 2
 
 
 def test_performance_mode() -> None:

@@ -78,4 +78,4 @@ class DeterministicMode:
         """
         # This will be called from llm_interface
         # and will check the global deterministic mode instance
-        return 0.0  # Deterministic mode always uses 0.0 temperature
+        return base_temperature  # Non-static callers should check .enabled first

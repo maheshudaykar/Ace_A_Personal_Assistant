@@ -166,12 +166,12 @@ class ConsolidationEngine:
 
         Specifications:
         - Type: CONSOLIDATED
-        - Content: Concatenate first 3 entries (deterministic)
+        - Content: Concatenate first 5 entries (deterministic)
         - Importance: Average + small boost, capped at 1.0
         - Embedding: Inherited from highest-quality entry
         """
         # Deterministic: Use entries in score-sorted order
-        merged_content = " | ".join(e.content[:100] for e in entries[:3])
+        merged_content = " | ".join(e.content[:200] for e in entries[:5])
         avg_importance = sum(e.importance_score for e in entries) / len(entries)
         boost_importance = min(avg_importance + 0.1, 1.0)
 

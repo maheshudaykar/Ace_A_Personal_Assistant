@@ -50,7 +50,7 @@ class ResourceProfiler:
         if vram_mb > 0 and ram_mb >= 6 * 1024:
             return "performance", 4
         if ram_mb >= 2 * 1024:
-            return "balanced", 4
+            return "balanced", 2
         return "minimal", 2
 
     def _detect_vram_mb(self) -> int:

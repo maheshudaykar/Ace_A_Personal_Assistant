@@ -40,8 +40,8 @@ class TestVoteDivergenceDetection:
         assert "vote_divergence" in update.violation_type
         assert update.delta > 0  # Positive increase
     
-    def test_agreement_decreases_suspicion(self):
-        """Node voting with majority reduces suspicion (recovery)."""
+    def test_agreement_decreases_suspicion_after_streak(self):
+        """Recovery decay applies after consecutive agreement streak."""
         detector = ByzantineDetector(node_id="detector_1", cluster_size=3)
         
         # First, increase suspicion
@@ -54,17 +54,19 @@ class TestVoteDivergenceDetection:
         update1 = detector.analyze_vote(vote1, True)
         assert update1.delta > 0
         
-        # Then vote with majority
-        vote2 = VoteRecord(
-            node_id="node_2",
-            proposal_id="prop_2",
-            voted_for=True,
-            timestamp=time.time(),
-        )
-        update2 = detector.analyze_vote(vote2, True)
-        
-        assert update2.new_score < update2.old_score  # Score decreased
-        assert update2.delta < 0  # Negative delta (recovery)
+        # Then provide enough positive signals to unlock recovery decay.
+        updates = []
+        for i in range(2, 5):
+            vote = VoteRecord(
+                node_id="node_2",
+                proposal_id=f"prop_{i}",
+                voted_for=True,
+                timestamp=time.time(),
+            )
+            updates.append(detector.analyze_vote(vote, True))
+
+        assert updates[-1].new_score < updates[-1].old_score  # Score decreased
+        assert updates[-1].delta < 0  # Negative delta (recovery)
     
     def test_persistent_divergence_accumulates(self):
         """Repeated vote divergence accumulates violations."""

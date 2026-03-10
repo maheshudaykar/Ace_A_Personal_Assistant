@@ -31,6 +31,13 @@ from ace.runtime.runtime_config import (
 # Phase 4 additions
 from ace.runtime.agent_bus import AgentBus, AgentMessage
 from ace.runtime.task_graph_engine import GraphTask, TaskGraphEngine
+from ace.runtime.experiment_engine import (
+    Experiment,
+    ExperimentEngine,
+    ExperimentResult,
+    ExperimentRun,
+    Hypothesis,
+)
 
 __all__ = [
     "BudgetToken",
@@ -73,4 +80,9 @@ __all__ = [
     "AgentMessage",
     "GraphTask",
     "TaskGraphEngine",
+    "Hypothesis",
+    "ExperimentRun",
+    "ExperimentResult",
+    "Experiment",
+    "ExperimentEngine",
 ]

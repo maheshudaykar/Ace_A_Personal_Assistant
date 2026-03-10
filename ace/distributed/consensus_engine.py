@@ -116,7 +116,7 @@ class ConsensusEngine:
         # Election tracking
         self._election_timeout_ms = 0
         self._election_deadline = 0.0
-        self._last_heartbeat = time.time()
+        self._last_heartbeat = time.monotonic()
         
         # Thread safety
         self._lock = threading.RLock()
@@ -186,15 +186,15 @@ class ConsensusEngine:
             if self.state.role == NodeRole.LEADER:
                 return False  # Leaders don't timeout
             
-            current_time = time.time()
+            current_time = time.monotonic()
             return current_time >= self._election_deadline
     
     def reset_election_timeout(self) -> None:
         """Reset election timeout when hearing from leader."""
         with self._lock:
             self._election_timeout_ms = self.calculate_election_timeout(self.state.current_term)
-            self._election_deadline = time.time() + (self._election_timeout_ms / 1000.0)
-            self._last_heartbeat = time.time()
+            self._election_deadline = time.monotonic() + (self._election_timeout_ms / 1000.0)
+            self._last_heartbeat = time.monotonic()
     
     def start_election(self) -> ElectionResult:
         """
@@ -256,9 +256,7 @@ class ConsensusEngine:
                 self.state.next_index = {
                     peer: last_log_index + 1 for peer in self.peer_nodes
                 }
-                self.state.match_index = {
-                    peer: 0 for peer in self.peer_nodes
-                }
+                self.state.match_index = dict.fromkeys(self.peer_nodes, 0)
                 
                 logger.info(f"Node {self.node_id}: Elected LEADER for term {new_term}")
                 self._trace_log_event("leader_elected", {

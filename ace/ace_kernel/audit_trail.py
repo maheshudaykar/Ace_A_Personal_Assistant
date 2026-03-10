@@ -35,12 +35,14 @@ class AuditTrail:
         self._path.parent.mkdir(parents=True, exist_ok=True)
         if not self._path.exists():
             self._path.touch()
+        # Cache last hash to avoid O(n) scan on every append
+        self._last_hash: str = self._scan_last_hash()
 
     def append(self, event: Dict[str, Any]) -> AuditRecord:
         """Append an event to the audit trail and return the resulting record."""
         timestamp = self._time_fn().isoformat()
         with self._lock:
-            prev_hash = self._get_last_hash_unsafe()
+            prev_hash = self._last_hash
             record_hash = self._compute_hash(timestamp, event, prev_hash)
             record = AuditRecord(
                 timestamp=timestamp,
@@ -49,6 +51,7 @@ class AuditTrail:
                 hash=record_hash,
             )
             self._write_record(record)
+            self._last_hash = record_hash
             return record
 
     def iter_records(self) -> Iterable[AuditRecord]:
@@ -80,8 +83,8 @@ class AuditTrail:
                 prev_hash = record.hash
             return True
 
-    def _get_last_hash_unsafe(self) -> str:
-        """Return hash of last record, or genesis hash if empty (no lock)."""
+    def _scan_last_hash(self) -> str:
+        """Scan file once at init to find the last hash."""
         last_hash = "0" * 64
         for record in self._iter_records_unsafe():
             last_hash = record.hash

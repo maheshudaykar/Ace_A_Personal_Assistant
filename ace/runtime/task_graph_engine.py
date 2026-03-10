@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 import threading
+import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
@@ -70,8 +71,9 @@ class TaskGraphEngine:
                     elif not running_ids:
                         break
                     else:
-                        # Running tasks in flight — wait for them to complete before
+                        # Running tasks in flight — wait briefly before
                         # re-evaluating which tasks are now ready.
+                        time.sleep(0.01)
                         continue
 
                 futures = {}
@@ -101,7 +103,7 @@ class TaskGraphEngine:
     @staticmethod
     def _run_task(task: GraphTask, completed: Dict[str, GraphTask]) -> None:
         try:
-            task.result = task.fn(**{k: v for k, v in task.args.items()})
+            task.result = task.fn(**task.args)
             task.status = "done"
         except Exception as exc:
             task.status = "failed"
@@ -126,7 +128,7 @@ class TaskGraphEngine:
     @staticmethod
     def _validate_no_cycles(task_map: Dict[str, GraphTask]) -> None:
         """Kahn's algorithm for cycle detection."""
-        in_degree: Dict[str, int] = {tid: 0 for tid in task_map}
+        in_degree: Dict[str, int] = dict.fromkeys(task_map, 0)
         for task in task_map.values():
             for dep in task.dependencies:
                 if dep in in_degree:

@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Optional
 
 from ace.ace_memory import memory_config
-from ace.runtime import budget_enforcer
+from ace.runtime import budget_enforcer, runtime_config
 from ace.runtime.golden_trace import CycleMetadata, CompactionMetrics, ConsolidationMetrics, GoldenTrace
 
 if TYPE_CHECKING:
@@ -59,6 +59,9 @@ class MaintenanceScheduler:
         self._golden_trace = GoldenTrace(audit_trail)
         self._thread = None
         self._thread_running = False
+        self._last_cycle_duration_ms: float = 0.0
+        self._last_termination_reason: str = "not_started"
+        self._last_result: Optional[CycleResult] = None
 
     def start(self) -> None:
         with self._control_lock:
@@ -92,14 +95,33 @@ class MaintenanceScheduler:
             self._cycle_triggered.notify_all()
 
     def run_single_cycle(self, timeout_ms: int = 1000) -> CycleResult:
+        # timeout_ms kept for API compatibility; execution is synchronous and bounded.
+        _ = timeout_ms
         with self._control_lock:
-            self._cycle_triggered.notify_all()
-            self._cycle_triggered.wait(timeout=timeout_ms / 1000.0)
-        return CycleResult(cycle_id=self._cycle_count, duration_ms=0, termination_reason="completed", operations_executed=0, consolidation_merged=0, compaction_removed=0)
+            if self._emergency_stop:
+                return CycleResult(
+                    cycle_id=self._cycle_count,
+                    duration_ms=0.0,
+                    operations_executed=0,
+                    termination_reason="emergency_stop",
+                    consolidation_merged=0,
+                    compaction_removed=0,
+                )
+
+        return self._run_cycle()
 
     def get_status(self) -> MaintenanceStatus:
         with self._control_lock:
-            return MaintenanceStatus(active=self._thread_running, paused=self._paused, emergency_stop_requested=self._emergency_stop, last_cycle_id=self._cycle_count, last_cycle_duration_ms=0, last_termination_reason="not_started", total_cycles_executed=self._cycle_count, deterministic_mode=self._deterministic_mode)
+            return MaintenanceStatus(
+                active=self._thread_running,
+                paused=self._paused,
+                emergency_stop_requested=self._emergency_stop,
+                last_cycle_id=self._cycle_count,
+                last_cycle_duration_ms=self._last_cycle_duration_ms,
+                last_termination_reason=self._last_termination_reason,
+                total_cycles_executed=self._cycle_count,
+                deterministic_mode=self._deterministic_mode,
+            )
 
     def is_paused(self) -> bool:
         with self._control_lock:
@@ -129,12 +151,82 @@ class MaintenanceScheduler:
             with self._control_lock:
                 self._thread_running = False
 
-    def _run_cycle(self) -> None:
+    def _run_cycle(self) -> CycleResult:
         self._cycle_count += 1
-        self._golden_trace.record_cycle_start(self._cycle_count, self._deterministic_mode)
-        active_count_before = self._episodic._active_count
-        active_count_after = active_count_before
+        cycle_id = self._cycle_count
         cycle_start = datetime.now(timezone.utc)
-        cycle_end = datetime.now(timezone.utc)
-        metadata = CycleMetadata(cycle_id=self._cycle_count, deterministic_mode=self._deterministic_mode, timestamp_start=cycle_start.isoformat(), timestamp_end=cycle_end.isoformat(), duration_ms=0, operations_executed=0, consolidation=ConsolidationMetrics(merged_count=0, merge_groups=0, comparisons=0, guard_triggered=False), compaction=CompactionMetrics(removed_entries=0, archived_ratio_before=0, archived_ratio_after=0), termination_reason="completed", active_count_before=active_count_before, active_count_after=active_count_after)
-        self._golden_trace.record_cycle_end(metadata)
+        start_perf_ms = time.perf_counter() * 1000.0
+
+        self._golden_trace.record_cycle_start(cycle_id, self._deterministic_mode)
+
+        token = budget_enforcer.create_budget_token(
+            operations_budgeted=runtime_config.MAX_OPERATIONS_PER_CYCLE,
+            cpu_time_budgeted_ms=runtime_config.MAX_CYCLE_CPU_MS,
+        )
+
+        active_count_before = getattr(self._episodic, "_active_count", 0)
+        merged_count = 0
+        compaction_removed = 0
+        operations_executed = 0
+        termination_reason = "completed"
+        result: Optional[CycleResult] = None
+
+        try:
+            if not token.has_budget():
+                termination_reason = "budget_exhausted"
+            elif self._consolidation.should_consolidate():
+                merged_count = self._consolidation.consolidate(
+                    max_comparisons_per_pass=memory_config.MAX_COMPARISONS_PER_PASS,
+                )
+                operations_executed += max(1, merged_count)
+                token.operations_consumed += operations_executed
+                if not token.has_budget():
+                    termination_reason = "budget_exhausted"
+        except Exception:
+            termination_reason = "failed"
+            raise
+        finally:
+            active_count_after = getattr(self._episodic, "_active_count", active_count_before)
+            cycle_end = datetime.now(timezone.utc)
+            duration_ms = (time.perf_counter() * 1000.0) - start_perf_ms
+
+            metadata = CycleMetadata(
+                cycle_id=cycle_id,
+                deterministic_mode=self._deterministic_mode,
+                timestamp_start=cycle_start.isoformat(),
+                timestamp_end=cycle_end.isoformat(),
+                duration_ms=duration_ms,
+                operations_executed=operations_executed,
+                consolidation=ConsolidationMetrics(
+                    merged_count=merged_count,
+                    merge_groups=1 if merged_count > 0 else 0,
+                    comparisons=0,
+                    guard_triggered=False,
+                ),
+                compaction=CompactionMetrics(
+                    removed_entries=compaction_removed,
+                    archived_ratio_before=0.0,
+                    archived_ratio_after=0.0,
+                ),
+                termination_reason=termination_reason,
+                active_count_before=active_count_before,
+                active_count_after=active_count_after,
+            )
+            self._golden_trace.record_cycle_end(metadata)
+
+            result = CycleResult(
+                cycle_id=cycle_id,
+                duration_ms=duration_ms,
+                operations_executed=operations_executed,
+                termination_reason=termination_reason,
+                consolidation_merged=merged_count,
+                compaction_removed=compaction_removed,
+            )
+            with self._control_lock:
+                self._last_result = result
+                self._last_cycle_duration_ms = duration_ms
+                self._last_termination_reason = termination_reason
+
+        assert result is not None
+        return result
+

@@ -185,7 +185,7 @@ class PredictorAgent:
                 for a in next_actions:
                     existing.add(a)
                 pat.predicted_next_actions = sorted(
-                    existing, key=lambda x: hashlib.md5(x.encode()).hexdigest()
+                    existing, key=lambda x: hashlib.sha256(x.encode()).hexdigest()
                 )
                 # Confidence grows with frequency (capped at 1.0)
                 pat.confidence_score = min(1.0, pat.frequency / (pat.frequency + 1))
@@ -194,7 +194,7 @@ class PredictorAgent:
                     pattern_id=pattern_id,
                     sequence_prefix=prefix,
                     predicted_next_actions=sorted(
-                        next_actions, key=lambda x: hashlib.md5(x.encode()).hexdigest()
+                        next_actions, key=lambda x: hashlib.sha256(x.encode()).hexdigest()
                     ),
                     confidence_score=0.5,
                     frequency=1,

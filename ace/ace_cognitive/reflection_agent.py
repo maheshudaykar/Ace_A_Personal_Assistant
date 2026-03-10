@@ -9,6 +9,7 @@ from typing import Any, Dict, List, Optional
 
 from ace.runtime.agent_bus import AgentBus, AgentMessage
 from ace.runtime.golden_trace import GoldenTrace
+from ace.runtime.experiment_engine import ExperimentEngine
 from ace.ace_cognitive.coordinator_agent import WorkflowPlan
 
 __all__ = ["ReflectionResult", "ReflectionAgent"]
@@ -43,9 +44,15 @@ class ReflectionAgent:
 
     AGENT_ID = "reflector"
 
-    def __init__(self, bus: AgentBus, audit_trail: Any = None) -> None:
+    def __init__(
+        self,
+        bus: AgentBus,
+        audit_trail: Any = None,
+        experiment_engine: ExperimentEngine | None = None,
+    ) -> None:
         self._bus = bus
         self._audit = audit_trail
+        self._experiment_engine = experiment_engine
         self._trace = GoldenTrace.get_instance()
         self._reflections: Dict[str, ReflectionResult] = {}
         self._bus.subscribe(self.AGENT_ID, self._handle_message)
@@ -97,6 +104,20 @@ class ReflectionAgent:
             heuristic_updates=heuristic_updates,
         )
         self._reflections[result.reflection_id] = result
+        if failed_steps and self._experiment_engine is not None:
+            experiment = self._experiment_engine.create_experiment(
+                statement="Retry policy update reduces workflow failure rate",
+                baseline={"retry_policy": "fixed", "backoff": "none"},
+                experimental={"retry_policy": "exponential", "backoff": "jitterless"},
+                metric="throughput",
+                trials=3,
+            )
+            try:
+                exp_result = self._experiment_engine.run_experiment(experiment)
+                heuristic_updates["experiment_outcome"] = exp_result.insight
+            except Exception as exc:
+                heuristic_updates["experiment_error"] = str(exc)
+
         self._log(
             "reflection_complete",
             {
